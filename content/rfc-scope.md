@@ -683,19 +683,6 @@ rather than competing with them.
 
 ## Rejected Features
 
-- **A scope parameter on the `Fiber` constructor,** `new Fiber($callback, ?object $scope)`, with
-  the scope an arbitrary object. It covers fibers, but not callbacks queued by an event loop, nor
-  servers that don't use fibers, and it ties a language-level identity to one execution
-  primitive.
-- **A subclass, `ContextFiber extends Fiber`,** whose instances are scopes. `Fiber` is final, and
-  the engine enforces that for internal classes too, so the implementation would have to work
-  around the flag. `ReflectionClass(Fiber::class)->isFinal()` would be true for a class with a
-  subclass, and `get_class($fiber) === Fiber::class` would stop holding for every fiber.
-- **A factory, `Fiber::createContext(callable $callback): Fiber`,** where the scope is the fiber
-  that starts the task. Every piece of code in the task could then reach the server's own fiber,
-  with `resume()` and `throw()`. That fiber isn't reachable today: it appears in
-  `debug_backtrace()` only while it is the fiber that resumed the running code, and an event loop
-  resumes fibers itself.
 - **A scope that must be passed on explicitly,** without inheritance. Every library that creates
   fibers would need to pass the right scope on, which is the interoperability problem this RFC
   sets out to solve.
