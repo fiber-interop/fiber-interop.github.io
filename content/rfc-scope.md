@@ -1,11 +1,11 @@
 <!-- Master copy is maintained by the author (Frode Børli); this file is a published copy of it. Do not edit here. -->
 # PHP RFC: Scope
 
-- Version: 0.5
-- Date: 2026-10-13
+- Version: 0.6
+- Date: 2026-10-14
 - Author: Frode Børli
 - Status: Draft
-- First Published at: https://wiki.php.net/rfc/scope
+- First Published at: (not yet published; intended location https://wiki.php.net/rfc/scope)
 - Target: PHP 8.7
 
 ## Introduction
@@ -109,8 +109,9 @@ A `Scope` identifies one task. It carries no data and no behaviour beyond `run()
    generator function is called, for its whole life, like a fiber.
 4. When a fiber or a generator runs, the current scope is its own: the scope it belongs to, or
    the scope of a `run()` call active inside it. Where it is resumed from doesn't matter. Each
-   fiber, each generator, and `{main}`, has its own current scope, saved and restored when
-   execution switches between them.
+   fiber, each generator, and `{main}`, has its own current scope, saved and restored when execution switches between them. The current scope is therefore that of the
+   innermost executing context, fiber or generator, together with any `run()` active inside that
+   context; a `run()` active in a caller never overrides the membership of a generator or fiber it resumes.
 5. Functions and closures run in the scope of their caller.
 6. In `{main}`, outside any `run()`, and in fibers and generators
    created there, the current scope is the root scope, `Scope::getRootScope()`. The root scope is a
@@ -180,6 +181,18 @@ A container that keys its scoped services by `Fiber::getCurrent()` today changes
 `Scope::getCurrent()`, and becomes correct under any event loop, and in servers that don't use
 fibers. A library written against `phasync::getContext()` does the same and no longer depends on
 phasync.
+
+A scope has no lifecycle of its own: nothing starts it, nothing ends it, and it can be entered any
+number of times from independently created fibers. Both fibers below report the same scope, one by
+construction and one by entering it:
+
+```php
+$scope = new Scope();
+$a = $scope->run(fn() => new Fiber(fn() => Scope::getCurrent()));   // constructed inside $scope
+$b = new Fiber(fn() => $scope->run(fn() => Scope::getCurrent()));   // constructed outside, enters it
+$a->start(); $b->start();
+var_dump($a->getReturn() === $scope, $b->getReturn() === $scope);   // bool(true) bool(true)
+```
 
 ### Fibers and generators
 
@@ -322,19 +335,24 @@ follow the scope. A reference bound before a scope switch (`$g = &$_GET`) keeps 
 array it was bound to, as references do: the scope isolates the binding of the name, not objects
 already reached through it.
 
-**Implementation.** The engine keeps the five `zval`s of the current scope in the global symbol
-table where they are now, and on a scope switch stores them into the outgoing scope and loads the
-incoming scope's: five pointer moves, no copying of arrays. Reads and writes therefore cost
-exactly what they cost today, on both NTS and ZTS builds. A scope that never wrote any of the
-five owns no copies, and switching to or from it moves nothing. Under ZTS each thread has its own
-symbol table, so the per-thread arrays nest inside it as the root of that thread.
+**Implementation.** The intended mechanism is a swap of the five `zval`s: the engine keeps the five `zval`s of
+the current scope in the global symbol table where they are now, and on a scope switch stores them
+into the outgoing scope and loads the incoming scope's, with no copying of arrays. That would make
+reads and writes cost what they cost today, on both NTS and ZTS builds, and a scope that never wrote
+any of the five would own no copies. Whether the swap is sufficient against the auto-global
+machinery (`PG(http_globals)`, JIT auto-globals, `unset($_GET)`, `global $_GET`, lazily initialised
+auto-globals) is what the php-src patch must demonstrate, and the RFC's claim is only as strong as
+that patch. Under ZTS each thread has its own symbol table, so the per-thread arrays nest inside it
+as the root of that thread.
 
 **Why these five and why now.** They are the state the introduction's long-running-server
 argument is about; converting them demonstrates the backward-compatibility rule (code outside a
 scope sees the SAPI's arrays) on real state rather than asserting it; and the mechanism, swap on
 switch, is the one the follow-up RFC generalises, so a yes here settles its shape with the
 smallest possible surface. `$_SERVER` is left to that RFC, where the environment-versus-request
-split inside it can be discussed on its own.
+split inside it can be discussed on its own. Until then vote A isolates request input only: `REQUEST_URI`,
+`REQUEST_METHOD` and the `HTTP_*` entries of `$_SERVER` stay shared, so vote A alone does not give
+complete isolation of HTTP requests.
 
 **Prototype.** The accompanying extension cannot change the engine's symbol-table handling, so
 the behaviour is prototyped in userland: the polyfill of the `Scope` class swaps the five arrays
@@ -501,7 +519,7 @@ code outside scopes sees the state it sees today, so a subsystem can be converte
 without breaking that code.
 
 Each conversion also has to decide how a new scope's state starts: fresh, as in a new request, or
-as a copy of the state current when the scope was created. Output buffers presumably start empty. The two secondary votes settle it for their state: a new scope
+as a copy of the state current when the scope was created. Output buffers are left to their own RFC. The two secondary votes settle it for their state: a new scope
 inherits its creator's values (copy-on-write for arrays), and changes inside it stay inside it.
 
 ## Future Scope
@@ -514,14 +532,13 @@ getting it fast, so it should happen one subsystem at a time, each in an RFC of 
 today's behaviour for code outside scopes.
 
 State that could follow the scope includes:
-- `json_last_error()` and `json_last_error_msg()`, `preg_last_error()`;
-- `error_get_last()` and `error_clear_last()`;
-- `http_get_last_response_headers()` and `http_clear_last_response_headers()`;
 - `Locale::getDefault()` and `Locale::setDefault()`, and the default timezone (secondary vote B);
 - output buffering;
 - error and exception handlers, `ini_set()` values and shutdown functions;
-- the SAPI's response functions, `header()`, `headers_list()`, `headers_sent()` and
-  `http_response_code()`, which could be directed to a handler bound to the scope;
+- the SAPI's response side, `header()`, `headers_list()`, `headers_sent()`, `http_response_code()`
+  and the sink that receives the response body: an RFC that exposes these SAPI integration points to
+  userland, bound to the scope, so that a server can supply them per request; it is the same RFC that
+  supplies the bottom of a request scope's output stack (see output buffering below);
 - the superglobals (the request superglobals are secondary vote A).
 
 **Output buffering, the first follow-up.** Output is the hardest of the candidates and will be an
@@ -529,8 +546,7 @@ RFC of its own. `ob_start()` serves two uses that one mechanism conflates: reque
 belongs to the operation (every fiber of a request writes into the request's stack, as every line
 of a php-fpm request does today), and capture, which belongs to a piece of code (a template engine
 wrapping an `include`). The first calls for the output stack to follow the scope, with a server
-supplying the sink at the bottom of a request scope's stack (the response body) and nested scopes
-inheriting as usual, so no existing `ob_*` call changes meaning within one request. The second
+supplying the sink at the bottom of a request scope's stack (the response body); whether a nested scope shares its creator's stack or starts its own is left to that RFC, so no existing `ob_*` call changes meaning within one request. The second
 calls for a structured capture, `ob_context_run(callable): string`, a fresh buffer bound to the
 callable's execution, returned when it returns or throws, inherited by fibers started inside it;
 it is useful without any concurrency and it fixes the one real concurrency bug in capture, an
@@ -622,6 +638,8 @@ The tests cover, among other things:
   the generator and the fiber both find their scope again when resumed. (A generator can't
   `yield` while a `run()` call is active in its own body: a `yield` inside the callback makes the
   callback a generator.)
+- `unset($_GET)` inside a scope does not affect another scope or the root; `global $_GET` inside a
+  function called in a scope binds to that scope's array; a scope that only reads the arrays owns no copies.
 
 The extension can't add fields to the engine's fiber and generator objects, so it keeps their
 scopes in a `WeakMap` and follows execution through the observer API. Measured on PHP 8.5, x86-64:
@@ -656,9 +674,7 @@ rather than competing with them.
   indirection, so access costs what it costs today on both builds and a switch costs a bounded
   number of word moves proportional to the converted state. State that hands out pointers into
   itself cannot be moved by value and is reached indirectly; the follow-up RFC lists such cases.
-- Scope adds no concurrency. Code that is correct under one request per process is correct per
-  scope for the same reason it is correct per thread under ZTS: one operation's state is never
-  visible to another.
+- Scope adds no concurrency. State that follows the scope is never visible to another operation, so code that was correct under one request per process stays correct for that state. State kept shared on purpose stays shared, as it is across requests in any long-running process today.
 
 ## References
 

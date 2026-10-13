@@ -93,7 +93,7 @@ $conf = is_file("$root/conformance.json") ? json_decode(file_get_contents("$root
 
 // ---- index
 $body = render($conv, source($arg, '.github', 'profile/README.md'), '.github');
-$callout = '<div class="banner"><strong>Scope RFC draft (v0.5, 2026-10-13):</strong> <a href="' . RFC_URL . '">read the draft</a>. Not yet on wiki.php.net; discussion will take place on php-internals.</div>';
+$callout = '<div class="banner"><strong>Scope RFC draft (v0.6, 2026-10-14):</strong> <a href="' . RFC_URL . '">read the draft</a>. Not yet on wiki.php.net; discussion will take place on php-internals.</div>';
 $body = preg_replace('~</p>~', '</p>' . $callout, $body, 1);
 $body .= "<h2>Install</h2>\n<pre><code>composer require fiber-interop/api fiber-interop/&lt;adapter&gt;</code></pre>\n";
 $body .= "<p>Replace <code>&lt;adapter&gt;</code> with the package for the loop you use.</p>\n<h2>Runtimes</h2>\n<ul class=\"runtimes\">\n";
@@ -111,9 +111,9 @@ page('index.html', 'Overview', $body, 'One way to write concurrent PHP that runs
 
 // ---- rfc (published copy of the author's draft; see content/rfc-scope.md)
 $md = preg_replace('~\A<!--.*?-->\s*~s', '', file_get_contents("$root/content/rfc-scope.md"));
-$body = '<div class="banner"><strong>Draft, version 0.5, 2026-10-13.</strong> This RFC is not yet published on wiki.php.net and is not under discussion. When it is, this page will point to <a href="https://wiki.php.net/rfc/scope">https://wiki.php.net/rfc/scope</a> and discussion happens on the php-internals mailing list, not here.</div>'
+$body = '<div class="banner"><strong>Draft, version 0.6, 2026-10-14.</strong> This RFC is not yet published on wiki.php.net and is not under discussion. When it is, this page will point to <a href="https://wiki.php.net/rfc/scope">https://wiki.php.net/rfc/scope</a> and discussion happens on the php-internals mailing list, not here.</div>'
     . (string) $conv->convert($md);
-page('rfc-scope.html', 'PHP RFC: Scope (draft)', $body, 'Draft PHP RFC: Scope, version 0.5. Not yet published on wiki.php.net.');
+page('rfc-scope.html', 'PHP RFC: Scope (draft)', $body, 'Draft PHP RFC: Scope, version 0.6. Not yet published on wiki.php.net.');
 
 // ---- spec
 $body = '<p class="lead">Generated from <a href="https://github.com/fiber-interop/api/blob/main/README.md">fiber-interop/api README.md</a>, the single source of truth.</p>'
