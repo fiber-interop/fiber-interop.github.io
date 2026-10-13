@@ -19,7 +19,16 @@ A single logical operation in PHP, such as an HTTP request in a long-running ser
 several fibers. A request handler may spawn fibers for parallel database queries, for streaming
 a response, or for background work that outlives the response. Libraries such as ReactPHP, AMPHP,
 Revolt and phasync create fibers, and queue callbacks, on the application's behalf. PHP has no way
-to say that this work belongs together, and three things need it.
+to say that this work belongs together.
+
+The deployment this makes possible is concrete. A long-running worker serves thousands of concurrent
+requests, each a scope on its own fibers, and a machine runs one worker per core: under NTS as
+processes, under ZTS as threads of one process sharing one opcache and one memory space. Ten
+thousand concurrent requests on eight threads is about 1,250 scopes per thread. Concurrency within a
+worker comes from fibers and scopes, parallelism across cores from threads or processes, and the two
+compose (see Threads).
+
+Three things need that identity.
 
 **Service containers.** A container offers services with a request lifetime (Laravel's scoped
 bindings, `Lifetime::Scoped` in Mini), and it needs an identity for "the current request" to key
