@@ -444,6 +444,8 @@ when a task is created. Several have this RFC's shape: an object that code runs 
   because its standard library and ecosystem adopted the convention. PHP's libraries have no such
   convention, and fibers are created inside code that has no parameter to pass a context through.
 
+**Service containers.** The idea that service lifetimes hang on a scope rather than on a thread or a process is established in dependency-injection containers. ASP.NET Core registers services as singleton, scoped or transient; the host creates one scope per request, and code creates its own with `IServiceScopeFactory.CreateScope()`, so a scoped service lives exactly as long as the scope it was resolved in. Spring's `@RequestScope` and Jakarta CDI's `@RequestScoped` are the same contract with the container deciding what the current request is. PHP frameworks do this without a primitive to hang it on: Laravel's scoped bindings exist because Octane serves many requests from one process, and Symfony resets services tagged `kernel.reset` between requests under long-running runtimes. Each defines "the current request" for itself, and none can share it with a library that uses a different container or event loop. The identity proposed here is what they would key on instead.
+
 **Earlier PHP discussions.** The [Fibers RFC](https://wiki.php.net/rfc/fibers) (PHP 8.1) set
 the pattern this RFC follows: it proposed "only the bare minimum required to allow user code to
 implement full-stack coroutines", and left event loops and scheduling to libraries because "it
