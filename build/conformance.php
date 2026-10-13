@@ -53,12 +53,36 @@ $runProbes = function (array $rt, string $env, ?string $ext): array {
     return $r;
 };
 
+// stress tier: api/bin/fiber-interop-stress <bootstrap>, results read from a PHPUnit JUnit log
+$runStress = function (array $rt, string $env, string $api): array {
+    $stress = "$api/bin/fiber-interop-stress";
+    $none = ['passed' => 0, 'failed' => 0, 'tests' => []];
+    if (!is_file($stress)) return $none + ['status' => 'not run'];
+    $log = tempnam(sys_get_temp_dir(), 'fi-stress-');
+    $iter = getenv('FIBER_INTEROP_STRESS_ITERATIONS') !== false ? '' : 'FIBER_INTEROP_STRESS_ITERATIONS=100 ';
+    $o = (string) shell_exec('cd ' . escapeshellarg($rt['dir']) . " && {$env}{$iter}timeout 600 " . escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($stress) . ' ' . escapeshellarg($rt['bootstrap']) . ' --log-junit ' . escapeshellarg($log) . ' 2>&1; echo "exit:$?"');
+    $xml = @simplexml_load_file($log);
+    @unlink($log);
+    if (!$xml) return $none + ['status' => 'fail', 'error' => substr(trim(strtok(preg_replace('/\s*exit:\d+\s*$/', '', trim($o)) ?: 'no output', "\n")), 0, 200)];
+    $r = ['passed' => 0, 'failed' => 0, 'tests' => []];
+    foreach ($xml->xpath('//testcase') as $tc) {
+        $n = (string) $tc['name'];
+        $bad = isset($tc->failure) ? $tc->failure : (isset($tc->error) ? $tc->error : null);
+        if ($bad === null) { $r['tests'][$n] = 'ok'; $r['passed']++; continue; }
+        $lines = array_values(array_filter(array_map('trim', explode("\n", (string) $bad)), fn($l) => $l !== '' && !str_ends_with($l, $n)));
+        $r['tests'][$n] = 'fail (' . substr($lines[0] ?? 'failed', 0, 200) . ')';
+        $r['failed']++;
+    }
+    return $r;
+};
+
 $result = ['generated' => gmdate('c'), 'php' => PHP_VERSION, 'examples' => $examples, 'purposes' => $purposes, 'runtimes' => []];
 foreach ($runtimes as $name => $rt) {
     $entry = ['commit' => $git($rt['dir']), 'api_commit' => $git($api), 'php' => PHP_VERSION, 'run_at' => gmdate('c'), 'results' => [], 'note' => null];
     if (!is_dir($rt['dir']) || !is_file($rt['bootstrap'])) {
         $entry['note'] = 'adapter checkout or bootstrap not present';
         $entry['results'] = array_fill_keys($examples, 'skipped');
+        $entry['stress'] = ['status' => 'not run', 'passed' => 0, 'failed' => 0, 'tests' => []];
         $entry['probes'] = $entry['probes_ext'] = ['api' => 'not run', 'loop' => 'not run', 'raw_fiber' => 'not run'];
     } else {
         $php = PHP_BINARY;
@@ -85,6 +109,7 @@ foreach ($runtimes as $name => $rt) {
             elseif (!preg_match("/^FAIL\s+$e\$/m", $o)) $crash ??= substr(trim($o), 0, 600);
         }
         $entry['probes'] = $runProbes($rt, $env, null);
+        $entry['stress'] = $runStress($rt, $env, $api);
         $entry['probes_ext'] = is_file($extSo) ? $runProbes($rt, $env, $extSo) : ['api' => 'not run', 'loop' => 'not run', 'raw_fiber' => 'not run'];
         $notes = [];
         if ($timedOut) $notes[] = 'timed out (30s): ' . implode(', ', $timedOut);

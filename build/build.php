@@ -139,7 +139,7 @@ if (!$conf) {
     $short = fn(string $r) => $r === 'reference' ? 'reference' : $nm($r);
     $sym = ['ok' => ['ok', 'ok'], 'fail' => ['fail', 'FAIL'], 'skipped' => ['skipped', 'skipped']];
     // summary
-    $sm = '<table class="summary"><thead><tr><th>Runtime</th><th>Library / extension version tested</th><th>PHP</th><th>Result</th><th>Scope state</th><th>Run at</th></tr></thead><tbody>';
+    $sm = '<table class="summary"><thead><tr><th>Runtime</th><th>Library / extension version tested</th><th>PHP</th><th>Result</th><th>Scope state</th><th>Stress</th><th>Run at</th></tr></thead><tbody>';
     $exc = [];
     $pk = ['api' => 'api', 'loop' => 'loop', 'raw_fiber' => 'raw fiber'];
     $probeExc = [];
@@ -161,6 +161,11 @@ if (!$conf) {
         if (!$res || count(array_keys($res, 'skipped')) === count($res)) [$bc, $bt] = ['skip', 'not run'];
         elseif ($pass === $tot) [$bc, $bt] = ['ok', "all $tot pass"];
         else [$bc, $bt] = ['warn', "$pass of $tot pass"];
+        $stt = $d['stress'] ?? null;
+        $sn = $stt ? $stt['passed'] + $stt['failed'] : 0;
+        if (!$sn) [$tc, $tt] = ['skip', 'not run'];
+        else [$tc, $tt] = [$stt['failed'] ? 'warn' : 'ok', $stt['passed'] . '/' . $sn];
+        foreach ($stt['tests'] ?? [] as $tn => $tv) if ($tv !== 'ok') $exc[] = [$r, "stress $tn", preg_replace('/^fail \((.*)\)$/s', '$1', $tv)];
         $note = $d['note'] ?? null;
         $ver = [];
         if (!empty($d['commit'])) $ver[] = 'adapter <code>' . $h($d['commit']) . '</code>';
@@ -170,7 +175,7 @@ if (!$conf) {
             $ver[] = $h((string)$note);
         }
         $run = !empty($d['run_at']) ? $h(str_replace('T', ' ', substr($d['run_at'], 0, 16))) . ' UTC' : 'n/a';
-        $sm .= '<tr><td>' . $h($nm($r)) . '</td><td>' . ($ver ? implode(', ', $ver) : 'n/a') . '</td><td>' . $h($d['php'] ?? 'n/a') . "</td><td><span class=\"badge $bc\">$bt</span></td><td><span class=\"badge $sc\">$st</span></td><td>$run</td></tr>";
+        $sm .= '<tr><td>' . $h($nm($r)) . '</td><td>' . ($ver ? implode(', ', $ver) : 'n/a') . '</td><td>' . $h($d['php'] ?? 'n/a') . "</td><td><span class=\"badge $bc\">$bt</span></td><td><span class=\"badge $sc\">$st</span></td><td><span class=\"badge $tc\">$tt</span></td><td>$run</td></tr>";
     }
     $sm .= '</tbody></table><p class="meta">All runs used the api at commit <code>' . $h($conf['runtimes']['reference']['api_commit'] ?? 'n/a') . '</code>.</p>';
     // scope probes table
