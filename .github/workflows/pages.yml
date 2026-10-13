@@ -70,6 +70,21 @@ jobs:
           php build/conformance.php "$PWD/work" "$PWD/conformance.json"
           cat conformance.json
 
+      # Same swoole adapter, OpenSwoole extension instead of Swoole (never both loaded).
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, :swoole, openswoole
+          tools: composer
+          coverage: none
+
+      - name: Run conformance for the swoole adapter on OpenSwoole
+        run: |
+          php -r 'exit(extension_loaded("openswoole") && !extension_loaded("swoole") ? 0 : 1);'
+          php build/conformance.php "$PWD/work" "$PWD/conformance-openswoole.json" openswoole
+          php -r '$a = json_decode(file_get_contents("conformance.json"), true); $b = json_decode(file_get_contents("conformance-openswoole.json"), true); $a["runtimes"] += $b["runtimes"]; file_put_contents("conformance.json", json_encode($a, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");'
+          cat conformance-openswoole.json
+
       - name: Build site
         run: php build/build.php remote
 

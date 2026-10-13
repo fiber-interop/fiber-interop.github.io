@@ -1,11 +1,14 @@
 <?php
 // Runs the api's conformance runner against every adapter and writes conformance.json.
-// Usage: php build/conformance.php [SRC_DIR=..] [OUT=conformance.json]
+// Usage: php build/conformance.php [SRC_DIR=..] [OUT=conformance.json] [only=openswoole]
+// With only=openswoole just the swoole adapter runs, recorded as runtime "openswoole" (CI loads ext-openswoole
+// instead of ext-swoole for that run); the other runtimes are skipped. Without it, openswoole is not run.
 // Each adapter is a sibling checkout (api, phasync, revolt, ...) with composer already installed.
 // A crashing adapter (no "ok"/"FAIL" lines) gets every example marked fail plus its error text.
 
 $src = realpath($argv[1] ?? __DIR__ . '/../..');
 $out = $argv[2] ?? __DIR__ . '/../conformance.json';
+$only = $argv[3] ?? null;
 $api = "$src/api";
 $runner = "$api/bin/fiber-interop-conformance";
 
@@ -24,6 +27,10 @@ $git = fn(string $dir) => trim((string) shell_exec('git -C ' . escapeshellarg($d
 $runtimes = ['reference' => ['dir' => $api, 'bootstrap' => "$api/tests/bootstrap-reference.php"]];
 foreach (['phasync', 'revolt', 'amp', 'react', 'swoole'] as $n) {
     $runtimes[$n] = ['dir' => "$src/$n", 'bootstrap' => "$src/$n/tests/bootstrap.php"];
+}
+
+if ($only === 'openswoole') {
+    $runtimes = ['openswoole' => $runtimes['swoole']];
 }
 
 $result = ['generated' => gmdate('c'), 'php' => PHP_VERSION, 'examples' => $examples, 'purposes' => $purposes, 'runtimes' => []];

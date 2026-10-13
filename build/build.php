@@ -132,7 +132,7 @@ page('scope.html', 'Scope', $body, 'Scope: operation identity across fibers and 
 if (!$conf) {
     page('conformance.html', 'Conformance', '<h1>Conformance</h1><p>No conformance.json was produced for this build.</p>', 'Conformance matrix.');
 } else {
-    $names = ['amp' => 'AMPHP', 'openswoole' => 'OpenSwoole', 'phasync' => 'phasync', 'react' => 'ReactPHP', 'revolt' => 'Revolt', 'swoole' => 'Swoole', 'reference' => 'reference adapter (api test double)'];
+    $names = ['amp' => 'AMPHP', 'openswoole' => 'OpenSwoole (swoole adapter)', 'phasync' => 'phasync', 'react' => 'ReactPHP', 'revolt' => 'Revolt', 'swoole' => 'Swoole', 'reference' => 'reference adapter (api test double)'];
     $nm = fn(string $r) => $names[$r] ?? $r;
     $rts = array_keys($conf['runtimes']);
     usort($rts, fn($a, $b) => ($a === 'reference') <=> ($b === 'reference') ?: strcasecmp($nm($a), $nm($b)));
