@@ -1,0 +1,71 @@
+name: site
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Adapters use path repositories to ../api and ../scope, so all repos are siblings in work/.
+      - uses: actions/checkout@v4
+        with: { repository: fiber-interop/api, path: work/api }
+      - uses: actions/checkout@v4
+        with: { repository: fiber-interop/scope, path: work/scope }
+      - uses: actions/checkout@v4
+        with: { repository: fiber-interop/phasync, path: work/phasync }
+      - uses: actions/checkout@v4
+        with: { repository: fiber-interop/revolt, path: work/revolt }
+      - uses: actions/checkout@v4
+        with: { repository: fiber-interop/amp, path: work/amp }
+      - uses: actions/checkout@v4
+        with: { repository: fiber-interop/react, path: work/react }
+      - uses: actions/checkout@v4
+        with: { repository: fiber-interop/swoole, path: work/swoole }
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, swoole
+          tools: composer
+          coverage: none
+
+      - name: Install api, scope and adapters
+        run: |
+          for d in api scope phasync revolt amp react swoole; do
+            echo "::group::composer install $d"
+            (cd work/$d && composer install --no-interaction --no-progress) || echo "composer install failed for $d"
+            echo "::endgroup::"
+          done
+
+      - name: Run conformance for every adapter
+        run: |
+          composer install --no-interaction --no-progress
+          php build/conformance.php "$PWD/work" "$PWD/conformance.json"
+          cat conformance.json
+
+      - name: Build site
+        run: php build/build.php remote
+
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: public }
+      - id: deployment
+        uses: actions/deploy-pages@v4

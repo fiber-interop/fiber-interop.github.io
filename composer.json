@@ -1,0 +1,10 @@
+{
+    "name": "fiber-interop/fiber-interop.github.io",
+    "description": "Project site for fiber-interop, generated from the READMEs.",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "league/commonmark": "^2.5"
+    }
+}
