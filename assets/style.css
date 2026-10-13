@@ -3,8 +3,8 @@
 *{box-sizing:border-box}
 html{font:17px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--fg)}
 body{margin:0}
-.wrap{max-width:46rem;margin:0 auto;padding:0 16px}
-.wide{max-width:70rem}
+.wrap{max-width:1600px;margin:0 auto;padding:0 24px}
+main p,main li,main blockquote{max-width:75ch}
 header{border-bottom:1px solid var(--line)}
 header .wrap{display:flex;flex-wrap:wrap;gap:.25rem 1.25rem;align-items:baseline;padding-top:.8rem;padding-bottom:.8rem}
 .mark{font-weight:700;letter-spacing:-.01em;color:var(--fg);text-decoration:none}
@@ -19,7 +19,17 @@ pre{background:var(--soft);border:1px solid var(--line);border-radius:6px;paddin
 table{border-collapse:collapse;width:100%}th,td{border:1px solid var(--line);padding:.35rem .6rem;text-align:left;vertical-align:top}
 th{background:var(--soft)}
 blockquote{margin:1rem 0;padding-left:1rem;border-left:3px solid var(--line);color:var(--mute)}
-.scroll{overflow-x:auto}
+.scroll,main>details{overflow-x:auto;max-width:100%}
+main table:not(.matrix):not(.summary){display:block;overflow-x:auto;max-width:100%}
+main pre{max-width:100%}
+summary{cursor:pointer;font-weight:600;margin:.5rem 0}
+.matrix th:first-child,.matrix td:first-child{position:sticky;left:0;background:var(--bg);z-index:1;min-width:16rem;max-width:26rem}
+.matrix thead th:first-child{background:var(--soft)}
+.badge{display:inline-block;padding:.05rem .6rem;border-radius:999px;font-size:.85rem;font-weight:600;white-space:nowrap}
+.badge.ok{background:#d7f0dd;color:#14602b}.badge.warn{background:#fdebc4;color:#7a4b00}.badge.skip{background:#e6e8ea;color:#4a525a}
+@media (prefers-color-scheme:dark){.badge.ok{background:#173a22;color:#7fdc98}.badge.warn{background:#4a3a10;color:#f1cf74}.badge.skip{background:#2b3238;color:#aab3bb}}
+.meta{color:var(--mute);font-size:.9rem}
+.exceptions{padding-left:1.2rem}
 .matrix td.s,.matrix th.s{text-align:center;white-space:nowrap}
 .matrix .ok{color:var(--ok)}.matrix .fail{color:var(--fail);font-weight:700}.matrix .skipped{color:var(--skip)}
 .matrix td.n{font-size:.88rem}.matrix td.n small{display:block;color:var(--mute)}

@@ -132,10 +132,50 @@ page('scope.html', 'Scope', $body, 'Scope: operation identity across fibers and 
 if (!$conf) {
     page('conformance.html', 'Conformance', '<h1>Conformance</h1><p>No conformance.json was produced for this build.</p>', 'Conformance matrix.');
 } else {
+    $names = ['amp' => 'AMPHP', 'openswoole' => 'OpenSwoole', 'phasync' => 'phasync', 'react' => 'ReactPHP', 'revolt' => 'Revolt', 'swoole' => 'Swoole', 'reference' => 'reference adapter (api test double)'];
+    $nm = fn(string $r) => $names[$r] ?? $r;
     $rts = array_keys($conf['runtimes']);
+    usort($rts, fn($a, $b) => ($a === 'reference') <=> ($b === 'reference') ?: strcasecmp($nm($a), $nm($b)));
+    $short = fn(string $r) => $r === 'reference' ? 'reference' : $nm($r);
     $sym = ['ok' => ['ok', 'ok'], 'fail' => ['fail', 'FAIL'], 'skipped' => ['skipped', 'skipped']];
+    // summary
+    $sm = '<table class="summary"><thead><tr><th>Runtime</th><th>Library / extension version tested</th><th>PHP</th><th>Result</th><th>Run at</th></tr></thead><tbody>';
+    $exc = [];
+    foreach ($rts as $r) {
+        $d = $conf['runtimes'][$r];
+        $res = $d['results'] ?? [];
+        $tot = count($conf['examples']);
+        $pass = count(array_keys($res, 'ok'));
+        foreach ($conf['examples'] as $e) {
+            $v = $res[$e] ?? 'skipped';
+            if ($v === 'fail' || !in_array($v, ['ok', 'skipped'], true)) $exc[] = [$r, $e, $v === 'fail' ? '' : (string)$v];
+        }
+        if (!$res || count(array_keys($res, 'skipped')) === count($res)) [$bc, $bt] = ['skip', 'not run'];
+        elseif ($pass === $tot) [$bc, $bt] = ['ok', "all $tot pass"];
+        else [$bc, $bt] = ['warn', "$pass of $tot pass"];
+        $note = $d['note'] ?? null;
+        $ver = [];
+        if (!empty($d['commit'])) $ver[] = 'adapter <code>' . $h($d['commit']) . '</code>';
+        if (is_array($note)) {
+            foreach ($note as $k => $v) $ver[] = $h(is_int($k) ? (string)$v : "$k $v");
+        } elseif ($note) {
+            $ver[] = $h((string)$note);
+        }
+        $run = !empty($d['run_at']) ? $h(str_replace('T', ' ', substr($d['run_at'], 0, 16))) . ' UTC' : 'n/a';
+        $sm .= '<tr><td>' . $h($nm($r)) . '</td><td>' . ($ver ? implode(', ', $ver) : 'n/a') . '</td><td>' . $h($d['php'] ?? 'n/a') . "</td><td><span class=\"badge $bc\">$bt</span></td><td>$run</td></tr>";
+    }
+    $sm .= '</tbody></table><p class="meta">All runs used the api at commit <code>' . $h($conf['runtimes']['reference']['api_commit'] ?? 'n/a') . '</code>.</p>';
+    // exceptions
+    if ($exc) {
+        $ex = '<ul class="exceptions">';
+        foreach ($exc as [$r, $e, $msg]) $ex .= '<li><strong>' . $h($nm($r)) . '</strong>: <code>' . $h($e) . '</code>' . ($msg !== '' ? ' - <code>' . $h($msg) . '</code>' : ' - failed (no error recorded)') . '</li>';
+        $ex .= '</ul>';
+    } else {
+        $ex = '<p>No exceptions: every runtime passes every example.</p>';
+    }
+    // matrix
     $t = '<div class="scroll"><table class="matrix"><thead><tr><th>Example</th>';
-    foreach ($rts as $r) $t .= "<th class=\"s\">$r</th>";
+    foreach ($rts as $r) $t .= '<th class="s">' . $h($short($r)) . '</th>';
     $t .= '</tr></thead><tbody>';
     foreach ($conf['examples'] as $e) {
         $t .= '<tr><td class="n"><code>' . $h($e) . '</code><small>' . $h($conf['purposes'][$e] ?? '') . '</small></td>';
@@ -152,12 +192,10 @@ if (!$conf) {
         $t .= '<th class="s">' . count(array_keys($res, 'ok')) . '/' . count($res) . '</th>';
     }
     $t .= '</tr></tbody></table></div>';
-    $n = '<h2>Notes per runtime</h2><table class="summary"><thead><tr><th>Runtime</th><th>PHP</th><th>Commit</th><th>Run</th><th>Notes</th></tr></thead><tbody>';
-    foreach ($conf['runtimes'] as $r => $d) {
-        $n .= '<tr><td><code>' . $h($r) . '</code></td><td>' . $h($d['php'] ?? '') . '</td><td><code>' . $h($d['commit'] ?? 'n/a') . '</code></td><td>' . $h(str_replace('T', ' ', substr($d['run_at'] ?? '', 0, 16))) . ' UTC</td><td>' . $h($d['note'] ?? '') . '</td></tr>';
-    }
-    $n .= '</tbody></table><p>All runs used the api at commit <code>' . $h($conf['runtimes']['reference']['api_commit'] ?? 'n/a') . '</code>. <em>skipped</em> means the runtime could not be run in that environment.</p>';
-    $body = '<h1>Conformance</h1><p class="lead">Every adapter runs the same ' . count($conf['examples']) . ' examples from the api and must print identical output. Rows are examples, columns are runtimes. Results are produced by CI from the current <code>main</code> of every repository, daily and on every push.</p>' . $t . $n
+    $body = '<h1>Conformance</h1><p class="lead">Every adapter runs the same ' . count($conf['examples']) . ' examples from the api and must print identical output. Results are produced by CI from the current <code>main</code> of every repository, daily and on every push.</p>'
+        . '<h2>Summary</h2>' . $sm
+        . '<h2>Exceptions</h2>' . $ex
+        . '<h2>Full matrix</h2><details class="matrixbox"><summary>Show the full matrix (examples by runtimes)</summary>' . $t . '<p class="meta"><em>skipped</em> means the runtime could not be run in that environment.</p></details>'
         . '<p>See <a href="spec.html">the specification</a> for what the conformance set does and does not prove.</p>';
-    page('conformance.html', 'Conformance', $body, 'Conformance matrix of fiber-interop adapters.', true);
+    page('conformance.html', 'Conformance', $body, 'Conformance matrix of fiber-interop adapters.');
 }
