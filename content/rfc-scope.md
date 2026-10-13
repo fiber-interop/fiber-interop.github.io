@@ -200,6 +200,11 @@ A container that keys its scoped services by `Fiber::getCurrent()` today changes
 fibers. A library written against `phasync::getContext()` does the same and no longer depends on
 phasync.
 
+A `Scope` is not serializable, like `Fiber`: it identifies an operation within one process. An
+identifier that must travel, to a queue worker or another service, is data; the application
+attaches it with a `WeakMap` and sends it as such, and the receiving side creates a scope of its
+own and attaches the same identifier.
+
 A scope has no lifecycle of its own: nothing starts it, nothing ends it, and it can be entered any
 number of times from independently created fibers. Both fibers below report the same scope, one by
 construction and one by entering it:
