@@ -33,12 +33,33 @@ if ($only === 'openswoole') {
     $runtimes = ['openswoole' => $runtimes['swoole']];
 }
 
+// scope probes: probes/scope-{api,loop,raw-fiber}.php in the adapter checkout, each prints "ok" and exits 0.
+// Run once with the polyfill, once more with the ext-scope extension loaded (EXT_SCOPE_SO, else $src/ext-scope/modules/scope.so).
+$extSo = getenv('EXT_SCOPE_SO') ?: "$src/ext-scope/modules/scope.so";
+$runProbes = function (array $rt, string $env, ?string $ext): array {
+    $r = [];
+    foreach (['api' => 'scope-api', 'loop' => 'scope-loop', 'raw_fiber' => 'scope-raw-fiber'] as $k => $f) {
+        $file = $rt['dir'] . "/probes/$f.php";
+        if (!is_file($file)) { $r[$k] = 'not run'; continue; }
+        $x = $ext !== null ? ' -d extension=' . escapeshellarg($ext) : '';
+        $o = (string) shell_exec('cd ' . escapeshellarg($rt['dir']) . " && {$env}timeout 30 " . escapeshellarg(PHP_BINARY) . "$x " . escapeshellarg($file) . ' 2>&1; echo "exit:$?"');
+        preg_match('/exit:(\d+)\s*$/', $o, $m);
+        $code = (int) ($m[1] ?? 1);
+        $o = trim(preg_replace('/\s*exit:\d+\s*$/', '', $o));
+        if ($code === 0 && $o === 'ok') { $r[$k] = 'ok'; continue; }
+        $r[$k] = 'fail';
+        $r[$k . '_line'] = $code === 124 ? 'timed out (30s)' : substr(strtok($o, "\n") ?: "exit $code, no output", 0, 200);
+    }
+    return $r;
+};
+
 $result = ['generated' => gmdate('c'), 'php' => PHP_VERSION, 'examples' => $examples, 'purposes' => $purposes, 'runtimes' => []];
 foreach ($runtimes as $name => $rt) {
     $entry = ['commit' => $git($rt['dir']), 'api_commit' => $git($api), 'php' => PHP_VERSION, 'run_at' => gmdate('c'), 'results' => [], 'note' => null];
     if (!is_dir($rt['dir']) || !is_file($rt['bootstrap'])) {
         $entry['note'] = 'adapter checkout or bootstrap not present';
         $entry['results'] = array_fill_keys($examples, 'skipped');
+        $entry['probes'] = $entry['probes_ext'] = ['api' => 'not run', 'loop' => 'not run', 'raw_fiber' => 'not run'];
     } else {
         $php = PHP_BINARY;
         // locally, SWOOLE_SO=/path/swoole.so loads the extension for the child php processes too
@@ -63,6 +84,8 @@ foreach ($runtimes as $name => $rt) {
             if (str_contains($o, 'exit:124')) $timedOut[] = $e;
             elseif (!preg_match("/^FAIL\s+$e\$/m", $o)) $crash ??= substr(trim($o), 0, 600);
         }
+        $entry['probes'] = $runProbes($rt, $env, null);
+        $entry['probes_ext'] = is_file($extSo) ? $runProbes($rt, $env, $extSo) : ['api' => 'not run', 'loop' => 'not run', 'raw_fiber' => 'not run'];
         $notes = [];
         if ($timedOut) $notes[] = 'timed out (30s): ' . implode(', ', $timedOut);
         if ($crash !== null) $notes[] = 'runner crashed: ' . $crash;

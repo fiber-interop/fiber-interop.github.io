@@ -26,8 +26,8 @@ summary{cursor:pointer;font-weight:600;margin:.5rem 0}
 .matrix th:first-child,.matrix td:first-child{position:sticky;left:0;background:var(--bg);z-index:1;min-width:16rem;max-width:26rem}
 .matrix thead th:first-child{background:var(--soft)}
 .badge{display:inline-block;padding:.05rem .6rem;border-radius:999px;font-size:.85rem;font-weight:600;white-space:nowrap}
-.badge.ok{background:#d7f0dd;color:#14602b}.badge.warn{background:#fdebc4;color:#7a4b00}.badge.skip{background:#e6e8ea;color:#4a525a}
-@media (prefers-color-scheme:dark){.badge.ok{background:#173a22;color:#7fdc98}.badge.warn{background:#4a3a10;color:#f1cf74}.badge.skip{background:#2b3238;color:#aab3bb}}
+.badge.ok{background:#d7f0dd;color:#14602b}.badge.warn{background:#fdebc4;color:#7a4b00}.badge.skip{background:#e6e8ea;color:#4a525a}.badge.bad{background:#f9d6d3;color:#8a1c14}
+@media (prefers-color-scheme:dark){.badge.ok{background:#173a22;color:#7fdc98}.badge.warn{background:#4a3a10;color:#f1cf74}.badge.skip{background:#2b3238;color:#aab3bb}.badge.bad{background:#4a1c18;color:#f2a39b}}
 .meta{color:var(--mute);font-size:.9rem}
 .exceptions{padding-left:1.2rem}
 .matrix td.s,.matrix th.s{text-align:center;white-space:nowrap}

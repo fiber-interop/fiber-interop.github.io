@@ -139,10 +139,18 @@ if (!$conf) {
     $short = fn(string $r) => $r === 'reference' ? 'reference' : $nm($r);
     $sym = ['ok' => ['ok', 'ok'], 'fail' => ['fail', 'FAIL'], 'skipped' => ['skipped', 'skipped']];
     // summary
-    $sm = '<table class="summary"><thead><tr><th>Runtime</th><th>Library / extension version tested</th><th>PHP</th><th>Result</th><th>Run at</th></tr></thead><tbody>';
+    $sm = '<table class="summary"><thead><tr><th>Runtime</th><th>Library / extension version tested</th><th>PHP</th><th>Result</th><th>Scope state</th><th>Run at</th></tr></thead><tbody>';
     $exc = [];
+    $pk = ['api' => 'api', 'loop' => 'loop', 'raw_fiber' => 'raw fiber'];
+    $probeExc = [];
     foreach ($rts as $r) {
         $d = $conf['runtimes'][$r];
+        $pr = $d['probes'] ?? [];
+        $pv = fn(string $k) => $pr[$k] ?? 'not run';
+        if ($pv('api') === 'not run' && $pv('loop') === 'not run' && $pv('raw_fiber') === 'not run') [$sc, $st] = ['skip', 'not run'];
+        elseif ($pv('api') !== 'ok') [$sc, $st] = ['bad', 'none'];
+        elseif ($pv('loop') === 'ok' && $pv('raw_fiber') === 'ok') [$sc, $st] = ['ok', 'full'];
+        else [$sc, $st] = ['warn', 'api-driven'];
         $res = $d['results'] ?? [];
         $tot = count($conf['examples']);
         $pass = count(array_keys($res, 'ok'));
@@ -162,10 +170,42 @@ if (!$conf) {
             $ver[] = $h((string)$note);
         }
         $run = !empty($d['run_at']) ? $h(str_replace('T', ' ', substr($d['run_at'], 0, 16))) . ' UTC' : 'n/a';
-        $sm .= '<tr><td>' . $h($nm($r)) . '</td><td>' . ($ver ? implode(', ', $ver) : 'n/a') . '</td><td>' . $h($d['php'] ?? 'n/a') . "</td><td><span class=\"badge $bc\">$bt</span></td><td>$run</td></tr>";
+        $sm .= '<tr><td>' . $h($nm($r)) . '</td><td>' . ($ver ? implode(', ', $ver) : 'n/a') . '</td><td>' . $h($d['php'] ?? 'n/a') . "</td><td><span class=\"badge $bc\">$bt</span></td><td><span class=\"badge $sc\">$st</span></td><td>$run</td></tr>";
     }
     $sm .= '</tbody></table><p class="meta">All runs used the api at commit <code>' . $h($conf['runtimes']['reference']['api_commit'] ?? 'n/a') . '</code>.</p>';
+    // scope probes table
+    $probeCell = function (array $p, string $k) use ($h, &$probeExc, &$cur) {
+        $v = $p[$k] ?? 'not run';
+        $cls = ['ok' => 'ok', 'fail' => 'fail'][$v] ?? 'skipped';
+        $title = '';
+        if ($v === 'fail') {
+            $line = $p[$k . '_line'] ?? '';
+            $title = ' title="' . $h($line) . '"';
+            $probeExc[] = [$cur[0], $cur[1], $k, $line];
+        }
+        return "<td class=\"s $cls\"$title>" . ($v === 'fail' ? 'FAIL' : $v) . '</td>';
+    };
+    $pt = '<div class="scroll"><table class="matrix probes"><thead><tr><th rowspan="2">Runtime</th>';
+    foreach ($pk as $label) $pt .= '<th colspan="2">' . $h($label) . '</th>';
+    $pt .= '</tr><tr>' . str_repeat('<th class="s">polyfill</th><th class="s">ext-scope</th>', 3) . '</tr></thead><tbody>';
+    foreach ($rts as $r) {
+        $d = $conf['runtimes'][$r];
+        $pt .= '<tr><td class="n">' . $h($nm($r)) . '</td>';
+        foreach (array_keys($pk) as $k) {
+            $cur = [$r, 'polyfill'];
+            $pt .= $probeCell($d['probes'] ?? [], $k);
+            $cur = [$r, 'ext-scope'];
+            $pt .= $probeCell($d['probes_ext'] ?? [], $k);
+        }
+        $pt .= '</tr>';
+    }
+    $pt .= '</tbody></table></div>';
+    $sm .= '<h3>Scope probes</h3>'
+        . '<p>Three standalone scripts per adapter show how far per-scope state (including superglobals) follows the code. <strong>api</strong> proves that code driven through the fiber-interop api keeps its scope; <strong>loop</strong> proves the same for code using the loop\'s own primitives; <strong>raw fiber</strong> proves that a plain <code>Fiber</code> keeps the scope of its creator.</p>'
+        . '<p>Only the engine can cover every switch, since a userland polyfill sees just the ones that go through its hooks; that is the case made in the <a href="https://wiki.php.net/rfc/scope">Scope RFC</a>. The ext-scope columns run the same probes with the native extension loaded, which does not yet swap superglobals, so api and loop are expected to fail there.</p>'
+        . $pt;
     // exceptions
+    foreach ($probeExc as [$r, $mode, $k, $line]) $exc[] = [$r, "scope probe $k ($mode)", $line];
     if ($exc) {
         $ex = '<ul class="exceptions">';
         foreach ($exc as [$r, $e, $msg]) $ex .= '<li><strong>' . $h($nm($r)) . '</strong>: <code>' . $h($e) . '</code>' . ($msg !== '' ? ' - <code>' . $h($msg) . '</code>' : ' - failed (no error recorded)') . '</li>';
