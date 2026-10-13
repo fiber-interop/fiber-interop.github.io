@@ -11,7 +11,8 @@
 ## Introduction
 
 `Scope` gives PHP code a standard way to identify the logical operation it belongs to, such as an
-HTTP request, a queued job or a transaction, and preserves that identity across fibers. It is a
+HTTP request, a queued job or a transaction, and preserves that identity across fibers and
+generators. It is a
 parallel to `Fiber`: a fiber is a unit of execution, and a scope is the unit of work that one or
 more executions belong to.
 
@@ -64,7 +65,8 @@ it, orthogonally. The two compose: engine coroutines that need not be `Fiber` ob
 scope membership exactly as fibers do.
 
 Most languages with lightweight concurrency have this primitive already (see Prior art). This RFC
-proposes the identity and, as two secondary votes, the request superglobals and the default locale and timezone (see Secondary vote A and B), and nothing else.
+proposes the identity. Two secondary votes let the request superglobals, and the default locale
+and timezone, follow it. Nothing else changes.
 
 ## Proposal
 
@@ -105,7 +107,7 @@ final class Generator
 }
 ```
 
-A `Scope` identifies one task. It carries no data and no behaviour beyond `run()`. The rules:
+A `Scope` identifies one operation. It carries no data and no behaviour beyond `run()`. The rules:
 
 1. `$scope->run($callback)` makes `$scope` the current scope while `$callback` runs, and restores
    the previous one afterwards, also when `$callback` throws. Calls nest: an inner `run()`
@@ -113,7 +115,7 @@ A `Scope` identifies one task. It carries no data and no behaviour beyond `run()
    from.
 2. A fiber belongs to the scope that is current when it is constructed, for its whole life. The
    fiber holds a strong reference to its scope. Fibers that libraries construct on the
-   application's behalf join the task without any cooperation from the library.
+   application's behalf join the operation without any cooperation from the library.
 3. A generator belongs to the scope that is current when it is created, that is, when the
    generator function is called, for its whole life, like a fiber.
 4. When a fiber or a generator runs, the current scope is its own: the scope it belongs to, or
@@ -217,8 +219,7 @@ $fiber = new Fiber(fn() => var_dump(Scope::getCurrent() === Scope::getRootScope(
 $scope->run(fn() => $fiber->start());   // bool(true): the fiber was constructed outside any scope
 ```
 
-That keeps the ambiguity the scope exists to remove from coming back. Making
-membership dynamic would reopen the ambiguity the scope exists to remove.
+Making membership dynamic would reopen the ambiguity the scope exists to remove.
 
 A fiber that must not join the task it is constructed in is constructed in the scope it belongs
 to. An event loop does this for the service fibers it creates on demand, for example a fiber that
@@ -291,8 +292,8 @@ identities owned by reference rather than tasks with an enforced lifetime.
 
 ### Secondary vote A: the request superglobals follow the scope
 
-This RFC proposes the identity and converts no engine state, except one case small enough to
-show the shape of the rest and useful enough on its own to decide separately.
+This RFC proposes the identity and converts no engine state, except two cases, each small enough
+to show the shape of the rest and useful enough on its own to decide separately. This is the first.
 
 Of PHP's superglobals, five describe nothing but the current request: `$_GET`, `$_POST`,
 `$_COOKIE`, `$_FILES` and `$_REQUEST`. `$_SERVER` mixes request facts with the environment
@@ -414,6 +415,7 @@ purpose: a registry, a cache, a singleton. Giving each scope its own copy would 
 meaning of `static`. Techniques that virtualize them exist, for running unmodified legacy code
 concurrently, and they are a compatibility measure, not a language semantic; this RFC and its
 follow-ups do not propose them.
+
 ## Prior art
 
 Most languages with lightweight concurrency propagate task context implicitly, and inherit it
@@ -470,9 +472,9 @@ The Concurrency Support project also uses the word *Scope*, for a group of corou
 shared lifetime and cancellation ([Async Scope](https://wiki.php.net/rfc/true_async_scope)).
 The two are different things: that Scope owns execution and ends it; this one identifies an
 operation and owns nothing, so that any scheduler, including one built on that project, can
-give its coroutines membership in it. The name is kept here because it is the established word
-for the concept in Python, Swift and Java (see above); a reader of both proposals should hold
-the two meanings apart.
+give its coroutines membership in it. The name is kept here because it is the word for a
+dynamically bound context in Java's scoped values and in the service containers above; a reader
+of both proposals should hold the two meanings apart.
 
 ## Backward Incompatible Changes
 
@@ -518,8 +520,8 @@ Code that never creates a `Scope` runs in the root scope and behaves exactly as 
 ## Discussion
 
 This RFC adds the identity, and converts no state apart from the two secondary votes. An argument can be made for converting PHP's
-own implicit state right away, together with the mechanism: the last-error functions, the
-default locale, output buffering. If each subsystem waits for an RFC of its own, applications may
+own implicit state right away, together with the mechanism: output buffering, the error
+handlers, `ini_set()` values. If each subsystem waits for an RFC of its own, applications may
 need an opt-in or an ini setting per subsystem for a long time, and some subsystems may never be
 converted.
 
@@ -577,16 +579,7 @@ Some state belongs to the operating system rather than to PHP, and can't follow 
 `setlocale()`, `chdir()`, `umask()`, environment variables, and the identity `openlog()` gives the C
 library's syslog. PHP could only emulate per-scope values for those.
 
-A later RFC could, for example, let a server give each scope its own superglobals, or decide how a
-subsystem's state is set up for a new scope:
-
-```php
-// Illustrations only: not part of this RFC.
-$scope->setGlobalsProvider(fn(string $name): array => $request->globals($name));
-Locale::setScopeAwareness(true);
-```
-
-A later RFC can also add operations on a task as a whole, for example:
+A later RFC can also add operations on an operation as a whole, for example:
 
 ```php
 Fiber::cancelScope($scope);   // illustration only: not part of this RFC
@@ -689,8 +682,10 @@ rather than competing with them.
 
 ## References
 
+- [Fibers](https://wiki.php.net/rfc/fibers)
 - [Concurrency Support in the PHP Engine](https://wiki.php.net/rfc/async_scheduler_abi)
 - [Async Scope](https://wiki.php.net/rfc/true_async_scope)
+- The prototype and its measurements across event loops: https://fiber-interop.github.io/
 
 ## Rejected Features
 
