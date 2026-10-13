@@ -4,7 +4,9 @@
 html{font:17px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--fg)}
 body{margin:0}
 .wrap{max-width:1600px;margin:0 auto;padding:0 24px}
-main p,main li,main blockquote{max-width:75ch}
+:root{--measure:78ch}
+main p,main li,main blockquote,main h1,main h2,main h3,main h4,main h5,main h6,main pre,main hr,.banner,.callout{max-width:var(--measure)}
+main ul,main ol{max-width:calc(var(--measure) + 1.5rem)}
 header{border-bottom:1px solid var(--line)}
 header .wrap{display:flex;flex-wrap:wrap;gap:.25rem 1.25rem;align-items:baseline;padding-top:.8rem;padding-bottom:.8rem}
 .mark{font-weight:700;letter-spacing:-.01em;color:var(--fg);text-decoration:none}
@@ -21,7 +23,7 @@ th{background:var(--soft)}
 blockquote{margin:1rem 0;padding-left:1rem;border-left:3px solid var(--line);color:var(--mute)}
 .scroll,main>details{overflow-x:auto;max-width:100%}
 main table:not(.matrix):not(.summary){display:block;overflow-x:auto;max-width:100%}
-main pre{max-width:100%}
+main pre{box-sizing:border-box}
 summary{cursor:pointer;font-weight:600;margin:.5rem 0}
 .matrix th:first-child,.matrix td:first-child{position:sticky;left:0;background:var(--bg);z-index:1;min-width:16rem;max-width:26rem}
 .matrix thead th:first-child{background:var(--soft)}
