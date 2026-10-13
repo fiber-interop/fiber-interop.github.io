@@ -36,3 +36,4 @@ summary{cursor:pointer;font-weight:600;margin:.5rem 0}
 .summary td,.summary th{font-size:.9rem}
 footer{border-top:1px solid var(--line);margin-top:3rem;padding:1rem 0 2rem;color:var(--mute);font-size:.9rem}
 ul.runtimes{padding-left:1.2rem}
+.banner{background:var(--soft);border:1px solid var(--line);border-left:4px solid var(--skip);border-radius:6px;padding:.7rem 1rem;margin:1rem 0 1.5rem}

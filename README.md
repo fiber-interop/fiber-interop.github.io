@@ -9,3 +9,5 @@ The site is a generated artifact; the READMEs of the other repositories are the 
 - `.github/workflows/pages.yml` does both on push, daily and on demand, then deploys to GitHub Pages.
 
 Locally: `composer install && php build/conformance.php && php build/build.php`.
+
+`content/rfc-scope.md` is a published copy of the Scope RFC draft (master maintained by the author) rendered to `rfc-scope.html`. All links to the RFC use the `RFC_URL` constant at the top of `build/build.php`; set it to `https://wiki.php.net/rfc/scope` to point them at the wiki once the RFC is published there.

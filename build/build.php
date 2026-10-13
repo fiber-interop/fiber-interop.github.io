@@ -9,6 +9,8 @@ use League\CommonMark\GithubFlavoredMarkdownConverter;
 
 $arg = $argv[1] ?? dirname(__DIR__, 2) ?: '';
 $root = dirname(__DIR__);
+// Where "the Scope RFC" links point. Switch to 'https://wiki.php.net/rfc/scope' once the RFC is published there.
+const RFC_URL = 'rfc-scope.html';
 $conv = new GithubFlavoredMarkdownConverter(['html_input' => 'strip', 'allow_unsafe_links' => false]);
 
 /** [repo, path] => markdown */
@@ -51,7 +53,7 @@ $h = fn(string $s) => htmlspecialchars($s, ENT_QUOTES);
 function page(string $file, string $title, string $body, string $desc, bool $wide = false): void
 {
     global $root;
-    $nav = ['index.html' => 'Overview', 'spec.html' => 'Specification', 'adapters.html' => 'Adapters', 'scope.html' => 'Scope', 'conformance.html' => 'Conformance'];
+    $nav = ['index.html' => 'Overview', 'spec.html' => 'Specification', 'adapters.html' => 'Adapters', 'scope.html' => 'Scope', 'rfc-scope.html' => 'RFC', 'conformance.html' => 'Conformance'];
     $links = '';
     foreach ($nav as $f => $t) $links .= '<a href="' . $f . '"' . ($f === $file ? ' aria-current="page"' : '') . '>' . $t . '</a>';
     $full = $file === 'index.html' ? 'fiber-interop' : "$title - fiber-interop";
@@ -102,8 +104,14 @@ foreach ($adapters as $key => [$label]) {
     $body .= "<li><a href=\"adapters.html#$key\">$label</a> (<code>fiber-interop/$key</code>)$st</li>\n";
 }
 $body .= "<li>TrueAsync, when it ships</li>\n</ul>\n";
-$body .= '<h2>Links</h2><ul><li><a href="spec.html">Specification</a></li><li><a href="conformance.html">Conformance matrix</a></li><li><a href="scope.html">Scope</a></li><li><a href="https://github.com/fiber-interop">GitHub organization</a></li></ul>';
+$body .= '<h2>Links</h2><ul><li><a href="spec.html">Specification</a></li><li><a href="conformance.html">Conformance matrix</a></li><li><a href="scope.html">Scope</a></li><li><a href="' . RFC_URL . '">the Scope RFC (draft)</a></li><li><a href="https://github.com/fiber-interop">GitHub organization</a></li></ul>';
 page('index.html', 'Overview', $body, 'One way to write concurrent PHP that runs on every event loop.');
+
+// ---- rfc (published copy of the author's draft; see content/rfc-scope.md)
+$md = preg_replace('~\A<!--.*?-->\s*~s', '', file_get_contents("$root/content/rfc-scope.md"));
+$body = '<div class="banner"><strong>Draft, version 0.5, 2026-10-13.</strong> This RFC is not yet published on wiki.php.net and is not under discussion. When it is, this page will point to <a href="https://wiki.php.net/rfc/scope">https://wiki.php.net/rfc/scope</a> and discussion happens on the php-internals mailing list, not here.</div>'
+    . (string) $conv->convert($md);
+page('rfc-scope.html', 'Scope RFC (draft)', $body, 'Draft PHP RFC: Scope, version 0.5. Not yet published on wiki.php.net.');
 
 // ---- spec
 $body = '<p class="lead">Generated from <a href="https://github.com/fiber-interop/api/blob/main/README.md">fiber-interop/api README.md</a>, the single source of truth.</p>'
@@ -122,7 +130,7 @@ page('adapters.html', 'Adapters', "<h1>Adapters</h1><p class=\"lead\">One packag
 
 // ---- scope
 $body = '<h1>Scope</h1><p class="lead">The identity of the operation code belongs to, an HTTP request or a job, preserved across fibers and generators.</p>'
-    . '<p>Scope is proposed for PHP core in the <a href="https://wiki.php.net/rfc/scope">Scope RFC</a>. Today it is available as a native extension, <code>fiber-interop/ext-scope</code>, with a userland polyfill, <code>fiber-interop/scope</code>, for installs without the extension. The polyfill and the extension expose the same class; code written against one runs on the other.</p>'
+    . '<p>Scope is proposed for PHP core in <a href="' . RFC_URL . '">the Scope RFC (draft)</a>. Today it is available as a native extension, <code>fiber-interop/ext-scope</code>, with a userland polyfill, <code>fiber-interop/scope</code>, for installs without the extension. The polyfill and the extension expose the same class; code written against one runs on the other.</p>'
     . '<h2>Install</h2><pre><code>composer require fiber-interop/scope</code></pre><p>Composer uses the extension when it is loaded and the polyfill otherwise.</p>'
     . '<h2>Polyfill (<code>fiber-interop/scope</code>)</h2>' . render($conv, source($arg, 'scope', 'README.md'), 'scope', 2, true)
     . '<h2>Extension (<code>fiber-interop/ext-scope</code>)</h2>' . render($conv, source($arg, 'ext-scope', 'README.md'), 'ext-scope', 2, true);
@@ -207,7 +215,7 @@ if (!$conf) {
     $pt .= '</tbody></table></div>';
     $sm .= '<h3>Scope probes</h3>'
         . '<p>Three standalone scripts per adapter show how far per-scope state (including superglobals) follows the code. <strong>api</strong> proves that code driven through the fiber-interop api keeps its scope; <strong>loop</strong> proves the same for code using the loop\'s own primitives; <strong>raw fiber</strong> proves that a plain <code>Fiber</code> keeps the scope of its creator.</p>'
-        . '<p>A userland polyfill sees only the switches that pass through a hook it controls: everything under Revolt and AMPHP, callbacks but not <code>await()</code> under ReactPHP, nothing Swoole performs itself. Covering every switch needs the runtime: the engine for fibers (the case made in the <a href="https://wiki.php.net/rfc/scope">Scope RFC</a>), and for Swoole the two switch hooks its core already has but does not expose to PHP. The ext-scope columns run the same probes with the native extension loaded. The extension provides the identity; per-scope superglobals are the RFC\'s secondary vote and are not in the extension yet, so <em>api</em> and <em>loop</em> fail there today and <em>raw fiber</em> passes. That is the measurement, not a defect of the extension.</p>'
+        . '<p>A userland polyfill sees only the switches that pass through a hook it controls: everything under Revolt and AMPHP, callbacks but not <code>await()</code> under ReactPHP, nothing Swoole performs itself. Covering every switch needs the runtime: the engine for fibers (the case made in the <a href="' . RFC_URL . '">the Scope RFC (draft)</a>), and for Swoole the two switch hooks its core already has but does not expose to PHP. The ext-scope columns run the same probes with the native extension loaded. The extension provides the identity; per-scope superglobals are the RFC\'s secondary vote and are not in the extension yet, so <em>api</em> and <em>loop</em> fail there today and <em>raw fiber</em> passes. That is the measurement, not a defect of the extension.</p>'
         . $pt;
     // exceptions
     foreach ($probeExc as [$r, $mode, $k, $line]) $exc[] = [$r, "scope probe $k ($mode)", $line];
