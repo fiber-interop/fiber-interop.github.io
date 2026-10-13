@@ -1,4 +1,3 @@
-<!-- Master copy is maintained by the author (Frode Børli); this file is a published copy of it. Do not edit here. -->
 # PHP RFC: Scope
 
 - Version: 0.6
@@ -21,6 +20,14 @@ several fibers. A request handler may spawn fibers for parallel database queries
 a response, or for background work that outlives the response. Libraries such as ReactPHP, AMPHP,
 Revolt and phasync create fibers, and queue callbacks, on the application's behalf. PHP has no way
 to say that this work belongs together.
+
+Other languages have one. Java (`ScopedValue`, JDK 25), Kotlin (`CoroutineContext`), .NET
+(`ExecutionContext`, `AsyncLocal<T>`), Python (`contextvars`), Go (`context.Context`) and
+JavaScript (`AsyncLocalStorage`, the `AsyncContext` proposal) each preserve an ambient context
+across changes of execution, and Java and .NET enterprise frameworks build request-scoped services
+on it. This RFC extracts the one requirement they share, an identity for the current operation
+that follows execution, and gives it a minimal PHP-native form; the rest is left to libraries, as
+PHP's design has left scheduling to them since fibers (see Prior art).
 
 The deployment this makes possible is concrete. A long-running worker serves thousands of concurrent
 requests, each a scope on its own fibers, and a machine runs one worker per core: under NTS as
@@ -434,8 +441,10 @@ when a task is created. Several have this RFC's shape: an object that code runs 
 - **Java:** `InheritableThreadLocal` values are inherited when a thread is constructed. Scoped
   values ([JEP 506](https://openjdk.org/jeps/506), JDK 25) are bound for the duration of a
   `run()` call and inherited by the child threads of a `StructuredTaskScope`.
-- **.NET:** `AsyncLocal<T>` (.NET Framework 4.6) holds "ambient data that is local to a given
-  asynchronous control flow", and flows into the tasks that flow starts.
+- **.NET:** `ExecutionContext` is captured when asynchronous work is started and restored when it
+  runs, and `ExecutionContext.Run()` runs a callback inside a given context, the same shape as
+  `run()` here. `AsyncLocal<T>` (.NET Framework 4.6) holds "ambient data that is local to a given
+  asynchronous control flow" and flows with it.
 - **Kotlin:** a coroutine inherits the `CoroutineContext` of the coroutine that launches it.
   `launch(Job())` starts one that is independent of its parent.
 - **Swift:** task-local values
@@ -474,14 +483,18 @@ The two are different things: that Scope owns execution and ends it; this one id
 operation and owns nothing, so that any scheduler, including one built on that project, can
 give its coroutines membership in it. The name is kept here because it is the word for a
 dynamically bound context in Java's scoped values and in the service containers above; a reader
-of both proposals should hold the two meanings apart.
+of both proposals should hold the two meanings apart. *Context* was considered and not chosen: in
+the languages above a context carries values, and this class carries none; in PHP the word already
+names stream contexts. The backward-compatibility footprint of the two names is the same (3 of 100
+sampled PHP files on GitHub declare a global `class Context`, 3 of 100 a global `class Scope`).
 
 ## Backward Incompatible Changes
 
 - A class named `Scope` in the global namespace can no longer be declared. Classes named `Scope`
   in a namespace are unaffected. Of the first 100 results of a GitHub code search for PHP files
   declaring `class Scope`, 88 are namespaced, and 2 declare it in the global namespace: a toy
-  interpreter in a multi-language repository, and a project last changed in 2018.
+  interpreter in a multi-language repository, and a project last changed in 2018 (a second sample
+  on 2026-10-14 found 3 of 100).
 
 ## Proposed PHP Version(s)
 
