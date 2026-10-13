@@ -51,10 +51,12 @@ jobs:
 
       - name: Install api, scope and adapters
         run: |
-          # main is usually ahead of v0.1.0, and composer versions a path repository from an exact tag
-          # on HEAD, otherwise as dev-main, which does not satisfy ^0.1. Tag HEAD locally (never pushed)
-          # as 0.1.999 so the adapters resolve the checked-out main of api and scope.
-          for d in api scope; do git -C work/$d tag -f v0.1.999; done
+          # main is usually ahead of v0.1.0, and composer versions a path repository without an exact
+          # tag as dev-main, which does not satisfy ^0.1. Stamp the (throwaway) checkouts of api and
+          # scope with version 0.1.999 so the adapters resolve the checked-out main.
+          for d in api scope; do
+            jq '.version = "0.1.999"' work/$d/composer.json > /tmp/c.json && mv /tmp/c.json work/$d/composer.json
+          done
           for d in api scope phasync revolt amp react swoole; do
             echo "::group::composer update $d"
             (cd work/$d && composer update --no-interaction --no-progress) || echo "composer install failed for $d"
