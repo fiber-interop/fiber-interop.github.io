@@ -46,6 +46,27 @@ One line of configuration is needed: Guzzle chooses its default handler in the s
 `Utils::chooseHandler()`, which has no override. A `Utils::setDefaultHandler()` in Guzzle would let
 installing the package be enough. Drivers per runtime are those of fiber-interop/curl.
 
+## pg: `fiber-interop/pg`
+
+`async\pg\query()` and `async\pg\query_params()` have the contracts of `pg_query()` and
+`pg_query_params()` (the result, or `false` with `pg_last_error()` set), but suspend only the calling
+task. `async\pg\start()` sends the query now and returns an awaitable. `async\pg\connect()` is
+`pg_connect()` using `PGSQL_CONNECT_ASYNC` and `pg_connect_poll()`. Version 0.1.0; 9/9 tests pass on
+Revolt, AMPHP, ReactPHP, phasync and Swoole. [README](https://github.com/fiber-interop/pg#readme)
+
+```
+composer require fiber-interop/pg
+```
+
+| Runtime | Driver |
+|---|---|
+| Revolt, AMPHP, ReactPHP, phasync (with or without the extension), Swoole | generic `SocketDriver` |
+
+There are no native drivers. The generic driver waits on the real socket from `pg_socket()` with
+`async\readable()`, so there is no polling: libpq hands out its descriptor and the event loop
+watches it directly. Use one connection per task for parallelism; libpq runs one query at a time per
+connection.
+
 ## Coming
 
-mysqli and pg.
+mysqli.
