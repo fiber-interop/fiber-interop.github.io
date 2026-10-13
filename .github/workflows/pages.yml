@@ -51,15 +51,16 @@ jobs:
 
       - name: Install api, scope and adapters
         run: |
-          # main is usually ahead of v0.1.0, and composer versions a path repository without an exact
-          # tag as dev-main, which does not satisfy ^0.1. Stamp the (throwaway) checkouts of api and
-          # scope with version 0.1.999 so the adapters resolve the checked-out main.
-          for d in api scope; do
-            jq '.version = "0.1.999"' work/$d/composer.json > /tmp/c.json && mv /tmp/c.json work/$d/composer.json
-          done
+          # The packages depend on each other as ^0.1 from Packagist. Here we want the checked-out
+          # main of every sibling instead: point each checkout at its siblings with path repositories
+          # (api and scope alias dev-main as 0.1.x-dev, which satisfies ^0.1 at dev stability).
           for d in api scope phasync revolt amp react swoole; do
             echo "::group::composer update $d"
-            (cd work/$d && composer update --no-interaction --no-progress) || echo "composer install failed for $d"
+            (cd work/$d \
+              && composer config minimum-stability dev \
+              && composer config prefer-stable true \
+              && for s in api scope; do [ "$s" = "$d" ] || composer config repositories.$s path ../$s; done \
+              && composer update --no-interaction --no-progress) || echo "composer install failed for $d"
             echo "::endgroup::"
           done
 
