@@ -56,7 +56,10 @@ foreach ($runtimes as $name => $rt) {
             $cmd = 'cd ' . escapeshellarg($rt['dir']) . " && {$env}timeout 30 " . escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($runner) . ' ' . escapeshellarg($rt['bootstrap']) . ' ' . escapeshellarg($e) . ' 2>&1; echo "exit:$?"';
             $o = (string) shell_exec($cmd);
             if (preg_match("/^ok\s+$e\$/m", $o)) { $entry['results'][$e] = 'ok'; continue; }
-            $entry['results'][$e] = 'fail';
+            // the first stderr line, else the first "actual" line, else the start of the output
+            $m = [];
+            $first = preg_match('/^--- stderr\R(?:PHP )?(.+)$/m', $o, $m) || preg_match('/^--- actual\R(.+)$/m', $o, $m) ? $m[1] : preg_replace('/\s*exit:\d+\s*$/', '', $o);
+            $entry['results'][$e] = substr(trim($first), 0, 200) ?: 'fail';
             if (str_contains($o, 'exit:124')) $timedOut[] = $e;
             elseif (!preg_match("/^FAIL\s+$e\$/m", $o)) $crash ??= substr(trim($o), 0, 600);
         }
@@ -65,7 +68,22 @@ foreach ($runtimes as $name => $rt) {
         if ($crash !== null) $notes[] = 'runner crashed: ' . $crash;
         $bad = array_keys(array_filter($entry['results'], fn($r) => $r !== 'ok'));
         if ($bad && !$notes) $notes[] = 'failing: ' . implode(', ', $bad);
-        $entry['note'] = $notes ? implode('; ', $notes) : null;
+        // versions actually tested: map of package/extension => version, plus problems under "problems"
+        $pk = ['phasync' => ['phasync/phasync'], 'revolt' => ['revolt/event-loop'], 'amp' => ['amphp/amp'], 'react' => ['react/event-loop', 'react/async'], 'swoole' => [], 'openswoole' => []][$name] ?? [];
+        $ver = [];
+        $ci = json_decode((string) shell_exec('cd ' . escapeshellarg($rt['dir']) . ' && composer show --format=json 2>/dev/null'), true);
+        foreach ($ci['installed'] ?? [] as $pkg) {
+            if (in_array($pkg['name'], $pk, true)) $ver[$pkg['name']] = $pkg['version'];
+        }
+        if ($name === 'swoole' || $name === 'openswoole') {
+            $ext = $name;
+            $v = trim((string) shell_exec("{$env}" . escapeshellarg(PHP_BINARY) . " -r 'echo phpversion(\"$ext\");' 2>/dev/null"));
+            $ver["ext-$ext"] = $v !== '' ? $v : 'not loaded';
+        }
+        $ver['php'] = PHP_VERSION;
+        $ver['api'] = $entry['api_commit'];
+        if ($notes) $ver['problems'] = implode('; ', $notes);
+        $entry['note'] = $ver;
     }
     $result['runtimes'][$name] = $entry;
     fwrite(STDERR, sprintf("%-10s %d ok / %d\n", $name, count(array_keys($entry['results'], 'ok')), count($examples)));
