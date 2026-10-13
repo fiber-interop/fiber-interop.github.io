@@ -53,7 +53,7 @@ $h = fn(string $s) => htmlspecialchars($s, ENT_QUOTES);
 function page(string $file, string $title, string $body, string $desc, bool $wide = false): void
 {
     global $root;
-    $nav = ['index.html' => 'Overview', 'spec.html' => 'Specification', 'adapters.html' => 'Adapters', 'scope.html' => 'Scope', 'rfc-scope.html' => 'RFC', 'conformance.html' => 'Conformance'];
+    $nav = ['index.html' => 'Overview', 'spec.html' => 'Specification', 'adapters.html' => 'Adapters', 'integrations.html' => 'Integrations', 'scope.html' => 'Scope', 'rfc-scope.html' => 'RFC', 'conformance.html' => 'Conformance'];
     $links = '';
     foreach ($nav as $f => $t) $links .= '<a href="' . $f . '"' . ($f === $file ? ' aria-current="page"' : '') . '>' . $t . '</a>';
     $full = $file === 'index.html' ? 'fiber-interop' : "$title - fiber-interop";
@@ -106,8 +106,14 @@ foreach ($adapters as $key => [$label]) {
     $body .= "<li><a href=\"adapters.html#$key\">$label</a> (<code>fiber-interop/$key</code>)$st</li>\n";
 }
 $body .= "<li>TrueAsync, when it ships</li>\n</ul>\n";
+$body .= "<h2>Integrations</h2>\n<ul>\n<li><a href=\"integrations.html\">curl</a> (<code>fiber-interop/curl</code>): cooperative <code>curl_exec()</code></li>\n"
+    . "<li><a href=\"integrations.html\">Guzzle</a> (<code>fiber-interop/guzzle</code>): concurrent Guzzle requests in fibers</li>\n"
+    . "<li>mysqli and pg: coming</li>\n</ul>\n";
 $body .= '<h2>Links</h2><ul><li><a href="spec.html">Specification</a></li><li><a href="conformance.html">Conformance matrix</a></li><li><a href="scope.html">Scope</a></li><li><a href="' . RFC_URL . '">the Scope RFC (draft)</a></li><li><a href="https://github.com/fiber-interop">GitHub organization</a></li></ul>';
 page('index.html', 'Overview', $body, 'One way to write concurrent PHP that runs on every event loop.');
+
+// ---- integrations (handwritten summary; package READMEs are linked, see content/integrations.md)
+page('integrations.html', 'Integrations', (string) $conv->convert(file_get_contents("$root/content/integrations.md")), 'Cooperative curl and Guzzle on every fiber-interop adapter.');
 
 // ---- rfc (published copy of the author's draft; see content/rfc-scope.md)
 $md = preg_replace('~\A<!--.*?-->\s*~s', '', file_get_contents("$root/content/rfc-scope.md"));
