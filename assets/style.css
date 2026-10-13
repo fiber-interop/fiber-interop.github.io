@@ -1,0 +1,28 @@
+:root{--bg:#fff;--fg:#1d2126;--mute:#5b6570;--line:#d9dee3;--soft:#f4f6f8;--link:#0b5cad;--ok:#1a7f37;--fail:#c62828;--skip:#8a6d00}
+@media (prefers-color-scheme:dark){:root{--bg:#14171a;--fg:#e4e7ea;--mute:#98a2ac;--line:#2e353c;--soft:#1c2125;--link:#6cb2ff;--ok:#4cc16b;--fail:#ff7b72;--skip:#d4b24c}}
+*{box-sizing:border-box}
+html{font:17px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--fg)}
+body{margin:0}
+.wrap{max-width:46rem;margin:0 auto;padding:0 16px}
+.wide{max-width:70rem}
+header{border-bottom:1px solid var(--line)}
+header .wrap{display:flex;flex-wrap:wrap;gap:.25rem 1.25rem;align-items:baseline;padding-top:.8rem;padding-bottom:.8rem}
+.mark{font-weight:700;letter-spacing:-.01em;color:var(--fg);text-decoration:none}
+nav{display:flex;flex-wrap:wrap;gap:.25rem 1rem;font-size:.95rem}
+a{color:var(--link)}
+nav a{color:var(--mute);text-decoration:none}nav a:hover,nav a[aria-current]{color:var(--fg);text-decoration:underline}
+h1,h2,h3{line-height:1.25;margin:2rem 0 .6rem}h1{font-size:1.9rem}h2{font-size:1.4rem}h3{font-size:1.1rem}
+.lead{font-size:1.2rem;color:var(--mute)}
+pre,code{font:.88em/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+pre{background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:.8rem 1rem;overflow-x:auto}
+:not(pre)>code{background:var(--soft);padding:.1em .3em;border-radius:3px}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid var(--line);padding:.35rem .6rem;text-align:left;vertical-align:top}
+th{background:var(--soft)}
+blockquote{margin:1rem 0;padding-left:1rem;border-left:3px solid var(--line);color:var(--mute)}
+.scroll{overflow-x:auto}
+.matrix td.s,.matrix th.s{text-align:center;white-space:nowrap}
+.matrix .ok{color:var(--ok)}.matrix .fail{color:var(--fail);font-weight:700}.matrix .skipped{color:var(--skip)}
+.matrix td.n{font-size:.88rem}.matrix td.n small{display:block;color:var(--mute)}
+.summary td,.summary th{font-size:.9rem}
+footer{border-top:1px solid var(--line);margin-top:3rem;padding:1rem 0 2rem;color:var(--mute);font-size:.9rem}
+ul.runtimes{padding-left:1.2rem}

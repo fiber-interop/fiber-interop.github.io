@@ -43,6 +43,9 @@ function render(GithubFlavoredMarkdownConverter $conv, string $md, string $repo,
     }, $html);
 }
 
+@mkdir("$root/public", 0777, true);
+copy("$root/assets/style.css", "$root/public/style.css");
+
 $h = fn(string $s) => htmlspecialchars($s, ENT_QUOTES);
 
 function page(string $file, string $title, string $body, string $desc, bool $wide = false): void

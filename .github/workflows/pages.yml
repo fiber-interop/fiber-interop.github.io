@@ -25,21 +25,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Full history so path repositories see the v0.1.0 tags (api requires scope ^0.1).
       # Adapters use path repositories to ../api and ../scope, so all repos are siblings in work/.
       - uses: actions/checkout@v4
-        with: { repository: fiber-interop/api, path: work/api }
+        with: { repository: fiber-interop/api, path: work/api, fetch-depth: 0 }
       - uses: actions/checkout@v4
-        with: { repository: fiber-interop/scope, path: work/scope }
+        with: { repository: fiber-interop/scope, path: work/scope, fetch-depth: 0 }
       - uses: actions/checkout@v4
-        with: { repository: fiber-interop/phasync, path: work/phasync }
+        with: { repository: fiber-interop/phasync, path: work/phasync, fetch-depth: 0 }
       - uses: actions/checkout@v4
-        with: { repository: fiber-interop/revolt, path: work/revolt }
+        with: { repository: fiber-interop/revolt, path: work/revolt, fetch-depth: 0 }
       - uses: actions/checkout@v4
-        with: { repository: fiber-interop/amp, path: work/amp }
+        with: { repository: fiber-interop/amp, path: work/amp, fetch-depth: 0 }
       - uses: actions/checkout@v4
-        with: { repository: fiber-interop/react, path: work/react }
+        with: { repository: fiber-interop/react, path: work/react, fetch-depth: 0 }
       - uses: actions/checkout@v4
-        with: { repository: fiber-interop/swoole, path: work/swoole }
+        with: { repository: fiber-interop/swoole, path: work/swoole, fetch-depth: 0 }
 
       - uses: shivammathur/setup-php@v2
         with:
