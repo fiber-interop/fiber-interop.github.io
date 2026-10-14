@@ -1,0 +1,25 @@
+{
+    "name": "fiber-interop/example-library",
+    "description": "Runnable samples for tutorial-library.html",
+    "type": "project",
+    "require": {
+        "php": "^8.1",
+        "fiber-interop/api": "*",
+        "fiber-interop/curl": "*",
+        "fiber-interop/guzzle": "*",
+        "fiber-interop/phasync": "*",
+        "fiber-interop/revolt": "*",
+        "fiber-interop/amp": "*"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "repositories": [
+        {"type": "path", "url": "../../../api"},
+        {"type": "path", "url": "../../../curl"},
+        {"type": "path", "url": "../../../guzzle"},
+        {"type": "path", "url": "../../../scope"},
+        {"type": "path", "url": "../../../phasync"},
+        {"type": "path", "url": "../../../revolt"},
+        {"type": "path", "url": "../../../amp"}
+    ]
+}

@@ -39,3 +39,10 @@ summary{cursor:pointer;font-weight:600;margin:.5rem 0}
 footer{border-top:1px solid var(--line);margin-top:3rem;padding:1rem 0 2rem;color:var(--mute);font-size:.9rem}
 ul.runtimes{padding-left:1.2rem}
 .banner{background:var(--soft);border:1px solid var(--line);border-left:4px solid var(--skip);border-radius:6px;padding:.7rem 1rem;margin:1rem 0 1.5rem}
+/* two-level navigation: groups in the top bar, pages of the active group in the sub-bar */
+header nav a[aria-current]{font-weight:600}
+nav.sub{display:block;background:var(--soft);border-top:1px solid var(--line);font-size:.9rem}
+nav.sub .wrap{display:flex;flex-wrap:wrap;gap:.2rem 1.1rem;padding-top:.45rem;padding-bottom:.45rem}
+nav.sub a[aria-current]{font-weight:600}
+.banner.small{font-size:.9rem;padding:.5rem .9rem;margin-top:2rem}
+@media (max-width:600px){.wrap{padding:0 16px}header .wrap{gap:.2rem .9rem}nav{gap:.2rem .8rem}}

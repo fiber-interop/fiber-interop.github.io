@@ -1,5 +1,5 @@
 <?php
-// Builds public/*.html from the READMEs (single source of truth) and conformance.json.
+// Builds public/*.html from the READMEs (single source of truth), content/*.md and conformance.json.
 // Usage: php build/build.php [SRC_DIR|remote]
 //   SRC_DIR  directory holding sibling checkouts (api, phasync, ...); default: parent of this repo
 //   remote   fetch every README from raw.githubusercontent.com (used in CI)
@@ -53,9 +53,27 @@ $h = fn(string $s) => htmlspecialchars($s, ENT_QUOTES);
 function page(string $file, string $title, string $body, string $desc, bool $wide = false): void
 {
     global $root;
-    $nav = ['index.html' => 'Overview', 'spec.html' => 'Specification', 'adapters.html' => 'Adapters', 'integrations.html' => 'Integrations', 'scope.html' => 'Scope', 'rfc-scope.html' => 'RFC', 'conformance.html' => 'Conformance'];
-    $links = '';
-    foreach ($nav as $f => $t) $links .= '<a href="' . $f . '"' . ($f === $file ? ' aria-current="page"' : '') . '>' . $t . '</a>';
+    // Two-level navigation: top-level groups, plus a sub-bar listing the pages of the active group.
+    $groups = [
+        'Home' => ['index.html' => 'Home'],
+        'Get started' => ['get-started.html' => 'Get started'],
+        'Tutorials' => ['tutorial-library.html' => 'Library authors', 'tutorial-container.html' => 'Containers'],
+        'Integrations' => ['integrations.html' => 'Integrations'],
+        'Runtimes' => ['adapters.html' => 'Adapters', 'spec.html' => 'Specification', 'conformance.html' => 'Conformance', 'scope.html' => 'Scope', 'rfc-scope.html' => 'Scope RFC'],
+    ];
+    // Leave out tutorial pages whose source is missing, so no link points at a page that was not built.
+    foreach ($groups['Tutorials'] as $f => $t) {
+        if (!is_file("$root/content/" . basename($f, '.html') . '.md')) unset($groups['Tutorials'][$f]);
+    }
+    $links = $sub = '';
+    foreach (array_filter($groups) as $g => $pages) {
+        $active = isset($pages[$file]);
+        $links .= '<a href="' . array_key_first($pages) . '"' . ($active ? ' aria-current="' . ($pages === [$file => $pages[$file]] ? 'page' : 'true') . '"' : '') . ">$g</a>";
+        if ($active && count($pages) > 1) {
+            foreach ($pages as $f => $t) $sub .= '<a href="' . $f . '"' . ($f === $file ? ' aria-current="page"' : '') . ">$t</a>";
+            $sub = '<nav class="sub" aria-label="' . $g . '"><div class="wrap">' . $sub . '</div></nav>';
+        }
+    }
     $full = $file === 'index.html' ? 'fiber-interop' : "$title - fiber-interop";
     $html = <<<HTML
 <!doctype html>
@@ -69,7 +87,7 @@ function page(string $file, string $title, string $body, string $desc, bool $wid
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header><div class="wrap"><a class="mark" href="index.html">fiber-interop</a><nav>$links</nav></div></header>
+<header><div class="wrap"><a class="mark" href="index.html">fiber-interop</a><nav aria-label="Site">$links</nav></div>$sub</header>
 <main class="wrap%WIDE%">
 $body
 </main>
@@ -92,11 +110,9 @@ $adapters = [
 $conf = is_file("$root/conformance.json") ? json_decode(file_get_contents("$root/conformance.json"), true) : null;
 
 // ---- index
-$body = render($conv, source($arg, '.github', 'profile/README.md'), '.github');
-$callout = '<div class="banner"><strong>Scope RFC draft (v0.6, 2026-10-14):</strong> <a href="' . RFC_URL . '">read the draft</a>. Not yet on wiki.php.net; discussion will take place on php-internals.</div>';
-$body = preg_replace('~</p>~', '</p>' . $callout, $body, 1);
-$body .= "<h2>Install</h2>\n<pre><code>composer require fiber-interop/api fiber-interop/&lt;adapter&gt;</code></pre>\n";
-$body .= "<p>Replace <code>&lt;adapter&gt;</code> with the package for the loop you use.</p>\n<h2>Runtimes</h2>\n<ul class=\"runtimes\">\n";
+// Developer-facing front page from content/index.md; the runtime-author links and the RFC note follow it.
+$body = (string) $conv->convert(file_get_contents("$root/content/index.md"));
+$body .= "<h2>For runtime and framework authors</h2>\n<p>One adapter package per event loop, each checked by the same conformance suite:</p>\n<ul class=\"runtimes\">\n";
 foreach ($adapters as $key => [$label]) {
     $st = '';
     if ($conf && isset($conf['runtimes'][$key])) {
@@ -106,15 +122,20 @@ foreach ($adapters as $key => [$label]) {
     $body .= "<li><a href=\"adapters.html#$key\">$label</a> (<code>fiber-interop/$key</code>)$st</li>\n";
 }
 $body .= "<li>TrueAsync, when it ships</li>\n</ul>\n";
-$body .= "<h2>Integrations</h2>\n<ul>\n<li><a href=\"integrations.html\">curl</a> (<code>fiber-interop/curl</code>): cooperative <code>curl_exec()</code></li>\n"
-    . "<li><a href=\"integrations.html\">Guzzle</a> (<code>fiber-interop/guzzle</code>): concurrent Guzzle requests in fibers</li>\n"
-    . "<li><a href=\"integrations.html\">pg</a> (<code>fiber-interop/pg</code>): cooperative <code>pg_query()</code> on the real socket</li>\n"
-    . "<li><a href=\"integrations.html\">mysqli</a> (<code>fiber-interop/mysqli</code>): cooperative <code>mysqli::query()</code>, native on phasync and Swoole</li>\n"
-    . "<li><a href=\"integrations.html\">process</a> (<code>fiber-interop/process</code>): cooperative <code>proc_open()</code> with concurrent pipe draining</li>\n"
-    . "<li><a href=\"integrations.html\">predis</a> (<code>fiber-interop/predis</code>): cooperative Predis on a non-blocking socket</li>\n"
-    . "<li><a href=\"integrations.html\">dbal</a> (<code>fiber-interop/dbal</code>): Doctrine DBAL drivers over the cooperative mysqli and pg</li>\n</ul>\n";
-$body .= '<h2>Links</h2><ul><li><a href="spec.html">Specification</a></li><li><a href="conformance.html">Conformance matrix</a></li><li><a href="scope.html">Scope</a></li><li><a href="' . RFC_URL . '">the Scope RFC (draft)</a></li><li><a href="https://github.com/fiber-interop">GitHub organization</a></li></ul>';
-page('index.html', 'Overview', $body, 'One way to write concurrent PHP that runs on every event loop.');
+$body .= '<p><a href="spec.html">Specification</a> · <a href="conformance.html">Conformance matrix</a> · <a href="scope.html">Scope</a> · <a href="https://github.com/fiber-interop">GitHub organization</a></p>';
+$body .= '<p class="banner small">Scope RFC draft (v0.6, 2026-10-14): <a href="' . RFC_URL . '">read the draft</a>. Not yet on wiki.php.net; discussion will take place on php-internals.</p>';
+page('index.html', 'Home', $body, 'Concurrent Guzzle, curl, PostgreSQL and MySQL in plain PHP, on phasync, Revolt, AMPHP, ReactPHP or Swoole.');
+
+// ---- get started and tutorials (handwritten; a missing file is skipped so the build never breaks)
+foreach (['get-started' => ['Get started', 'Install an adapter and run your first concurrent PHP program.'],
+          'tutorial-library' => ['Making a library fiber-friendly', 'Make a PHP library cooperative on every fiber-interop runtime, with Guzzle as the case study.'],
+          'tutorial-container' => ['Scoped lifetime in a service container', 'Per-request services in a service container that serves concurrent requests.']] as $name => [$title, $desc]) {
+    if (!is_file("$root/content/$name.md")) {
+        fwrite(STDERR, "warning: content/$name.md not found, $name.html not built\n");
+        continue;
+    }
+    page("$name.html", $title, (string) $conv->convert(file_get_contents("$root/content/$name.md")), $desc);
+}
 
 // ---- integrations (handwritten summary; package READMEs are linked, see content/integrations.md)
 page('integrations.html', 'Integrations', (string) $conv->convert(file_get_contents("$root/content/integrations.md")), 'Cooperative curl, Guzzle, pg, mysqli, process, predis and Doctrine DBAL on every fiber-interop adapter.');

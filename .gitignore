@@ -2,3 +2,4 @@ vendor/
 /public/
 /conformance.json
 /work/
+/examples/*/composer.lock

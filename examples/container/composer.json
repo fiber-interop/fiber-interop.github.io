@@ -1,0 +1,28 @@
+{
+    "name": "fiber-interop/example-container",
+    "description": "Runnable sources for the scoped-container tutorial (tutorial-container.html).",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": "^8.1",
+        "fiber-interop/api": "*",
+        "fiber-interop/scope": "*",
+        "fiber-interop/phasync": "*",
+        "fiber-interop/revolt": "*",
+        "fiber-interop/amp": "*",
+        "fiber-interop/react": "*"
+    },
+    "autoload": {
+        "classmap": ["Container.php"]
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "repositories": [
+        { "type": "path", "url": "../../../api", "options": { "symlink": true } },
+        { "type": "path", "url": "../../../scope", "options": { "symlink": true } },
+        { "type": "path", "url": "../../../phasync", "options": { "symlink": true } },
+        { "type": "path", "url": "../../../revolt", "options": { "symlink": true } },
+        { "type": "path", "url": "../../../amp", "options": { "symlink": true } },
+        { "type": "path", "url": "../../../react", "options": { "symlink": true } }
+    ]
+}
