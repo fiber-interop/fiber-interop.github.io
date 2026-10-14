@@ -126,11 +126,12 @@ composer require fiber-interop/predis
 
 ## dbal: `fiber-interop/dbal`
 
-Doctrine DBAL 4 drivers: `['driverClass' => async\dbal\PgSQL\Driver::class]` or
-`async\dbal\Mysqli\Driver::class` (or `async\dbal\params($params)`), so Symfony and Doctrine ORM
+Doctrine DBAL 3.8+ and 4 drivers: `async\dbal\params($params)` turns `'driver' => 'pgsql'` /
+`'mysqli'` into the matching `driverClass` for the installed DBAL major (`async\dbal\PgSQL\Driver`
+on 4, `async\dbal\V3\PgSQL\Driver` on 3, likewise for mysqli), so Symfony and Doctrine ORM
 queries suspend only the calling task. DBAL's own results and exceptions. On mysqli, queries with
 parameters are prepared statements and block (PHP has no async `mysqli_stmt::execute()`); on pgsql
-everything is cooperative. Version 0.1.0. [README](https://github.com/fiber-interop/dbal#readme)
+everything is cooperative. Version 0.2.0. [README](https://github.com/fiber-interop/dbal#readme)
 
 ```
 composer require fiber-interop/dbal
