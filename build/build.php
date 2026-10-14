@@ -47,6 +47,7 @@ function render(GithubFlavoredMarkdownConverter $conv, string $md, string $repo,
 
 @mkdir("$root/public", 0777, true);
 copy("$root/assets/style.css", "$root/public/style.css");
+copy("$root/assets/favicon.svg", "$root/public/favicon.svg");
 
 $h = fn(string $s) => htmlspecialchars($s, ENT_QUOTES);
 
@@ -85,6 +86,7 @@ function page(string $file, string $title, string $body, string $desc, bool $wid
 <title>$full</title>
 <meta name="description" content="$desc">
 <link rel="stylesheet" href="style.css">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 </head>
 <body>
 <header><div class="wrap"><a class="mark" href="index.html">fiber-interop</a><nav aria-label="Site">$links</nav></div>$sub</header>
