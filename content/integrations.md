@@ -124,6 +124,18 @@ exceptions are Predis's own. Version 0.1.0. [README](https://github.com/fiber-in
 composer require fiber-interop/predis
 ```
 
+## dbal: `fiber-interop/dbal`
+
+Doctrine DBAL 4 drivers: `['driverClass' => async\dbal\PgSQL\Driver::class]` or
+`async\dbal\Mysqli\Driver::class` (or `async\dbal\params($params)`), so Symfony and Doctrine ORM
+queries suspend only the calling task. DBAL's own results and exceptions. On mysqli, queries with
+parameters are prepared statements and block (PHP has no async `mysqli_stmt::execute()`); on pgsql
+everything is cooperative. Version 0.1.0. [README](https://github.com/fiber-interop/dbal#readme)
+
+```
+composer require fiber-interop/dbal
+```
+
 | Runtime | Result |
 |---|---|
 | Revolt, AMPHP, ReactPHP, Swoole, phasync without the extension | 8/8 |
