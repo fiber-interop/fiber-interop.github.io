@@ -113,3 +113,26 @@ A timeout sends SIGTERM, then SIGKILL after a 2 second grace, and throws an `asy
 Process exit has no file descriptor PHP can wait on, so exit is detected by polling
 `proc_get_status()` with `async\sleep()` between polls (1 ms backing off to 10 ms). A pidfd exposed
 from php-src would remove the polling.
+
+## predis: `fiber-interop/predis`
+
+`async\predis\client($parameters, $options)` returns a `Predis\Client` whose `tcp`, `tls` and `unix`
+connections are `async\predis\Connection`, so a Redis command suspends only the calling task. The
+exceptions are Predis's own. Version 0.1.0. [README](https://github.com/fiber-interop/predis#readme)
+
+```
+composer require fiber-interop/predis
+```
+
+| Runtime | Result |
+|---|---|
+| Revolt, AMPHP, ReactPHP, Swoole, phasync without the extension | 8/8 |
+| phasync with the phasync extension | 7/8, pub/sub skipped: extension bug under investigation |
+
+There are no native drivers; one implementation serves every runtime. `Connection` is a Predis
+`StreamConnection` subclass with a non-blocking socket: connecting waits on `async\writable()`, the
+TLS handshake loops on `async\readable()`, and reads and writes wait on `async\readable()` and
+`async\writable()`. Outside `run()` the calls block.
+
+Give each task its own client: one connection is one socket. The overlap test uses `BLPOP`, because
+`DEBUG SLEEP` blocks the Redis server itself for every client.
