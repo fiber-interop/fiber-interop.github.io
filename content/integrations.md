@@ -67,6 +67,26 @@ There are no native drivers. The generic driver waits on the real socket from `p
 watches it directly. Use one connection per task for parallelism; libpq runs one query at a time per
 connection.
 
-## Coming
+## mysqli: `fiber-interop/mysqli`
 
-mysqli.
+`async\mysqli\query()` has the contract of `$m->query()` (a `mysqli_result`, `true`, or `false` with
+`$m->errno` / `$m->error` set), but suspends only the calling task. `async\mysqli\start()` sends the
+query now and returns an awaitable. Version 0.1.0; 9/9 tests pass on Revolt, AMPHP, ReactPHP,
+phasync (generic and native) and Swoole (generic and native).
+[README](https://github.com/fiber-interop/mysqli#readme)
+
+```
+composer require fiber-interop/mysqli
+```
+
+| Runtime | Driver |
+|---|---|
+| phasync with the phasync extension | native: the extension makes a plain `$m->query()` cooperative |
+| Swoole | native: the TCP hook makes a plain `$m->query()` cooperative |
+| Revolt, AMPHP, ReactPHP, phasync without the extension | generic `PollDriver` |
+
+The generic driver sends with `MYSQLI_ASYNC` and polls `mysqli_poll()` from one task, sleeping with
+`async\sleep()` (1 ms after activity, backing off to 10 ms). mysqli exposes no file descriptor for a
+connection, so there is nothing to hand to an event loop; a `mysqli_socket()` in php-src would remove
+the polling. Use one connection per task for parallelism: a query started on a busy connection is
+queued and sent when the previous one completes.
