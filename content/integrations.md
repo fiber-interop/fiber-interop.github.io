@@ -90,3 +90,26 @@ The generic driver sends with `MYSQLI_ASYNC` and polls `mysqli_poll()` from one 
 connection, so there is nothing to hand to an event loop; a `mysqli_socket()` in php-src would remove
 the polling. Use one connection per task for parallelism: a query started on a busy connection is
 queued and sent when the previous one completes.
+
+## process: `fiber-interop/process`
+
+`async\process\run($command, $cwd, $env, $stdin, $timeout)` runs a command to completion and returns a
+`Result` (`exitCode`, `stdout`, `stderr`, `signal`), suspending only the calling task.
+`async\process\start()` takes the same arguments and returns an awaitable `Process` with `pid` and
+`kill()`. Version 0.1.0; 9/9 tests pass on Revolt, AMPHP, ReactPHP, phasync (with and without the
+extension) and Swoole. [README](https://github.com/fiber-interop/process#readme)
+
+```
+composer require fiber-interop/process
+```
+
+There are no native drivers; one implementation serves every runtime. Inside `run()` stdin is written
+on `async\writable()` while stdout and stderr are drained concurrently on `async\readable()`, so a
+child producing a lot of output cannot deadlock against one still being fed. Outside `run()` the
+calls block.
+
+A timeout sends SIGTERM, then SIGKILL after a 2 second grace, and throws an `async\TimeoutException`.
+
+Process exit has no file descriptor PHP can wait on, so exit is detected by polling
+`proc_get_status()` with `async\sleep()` between polls (1 ms backing off to 10 ms). A pidfd exposed
+from php-src would remove the polling.
