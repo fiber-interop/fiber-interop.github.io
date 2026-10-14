@@ -108,3 +108,5 @@ covers. The numbers above are from the Revolt and phasync adapters without the e
 
 Sources of every example on this page:
 [examples/get-started](https://github.com/fiber-interop/fiber-interop.github.io/tree/main/examples/get-started).
+
+Next: each package in [Integrations](integrations.html); for making a library fiber-friendly, [Library authors](tutorial-library.html). The [front page](index.html) has the measured numbers and the adapter overview.

@@ -111,7 +111,8 @@ $conf = is_file("$root/conformance.json") ? json_decode(file_get_contents("$root
 
 // ---- index
 // Developer-facing front page from content/index.md; the runtime-author links and the RFC note follow it.
-$body = (string) $conv->convert(file_get_contents("$root/content/index.md"));
+// content/index.md is our own file, so it may carry raw HTML (the bars, the adapter cards, the on-page nav).
+$body = (string) (new GithubFlavoredMarkdownConverter(['allow_unsafe_links' => false]))->convert(file_get_contents("$root/content/index.md"));
 $body .= "<h2>For runtime and framework authors</h2>\n<p>One adapter package per event loop, each checked by the same conformance suite:</p>\n<ul class=\"runtimes\">\n";
 foreach ($adapters as $key => [$label]) {
     $st = '';
@@ -123,7 +124,6 @@ foreach ($adapters as $key => [$label]) {
 }
 $body .= "<li>TrueAsync, when it ships</li>\n</ul>\n";
 $body .= '<p><a href="spec.html">Specification</a> · <a href="conformance.html">Conformance matrix</a> · <a href="scope.html">Scope</a> · <a href="https://github.com/fiber-interop">GitHub organization</a></p>';
-$body .= '<p class="banner small">Scope RFC draft (v0.6, 2026-10-14): <a href="' . RFC_URL . '">read the draft</a>. Not yet on wiki.php.net; discussion will take place on php-internals.</p>';
 page('index.html', 'Home', $body, 'Concurrent Guzzle, curl, PostgreSQL and MySQL in plain PHP, on phasync, Revolt, AMPHP, ReactPHP or Swoole.');
 
 // ---- get started and tutorials (handwritten; a missing file is skipped so the build never breaks)
