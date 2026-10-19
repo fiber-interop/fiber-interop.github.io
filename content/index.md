@@ -12,9 +12,9 @@ API may change before 1.0.
 
 <h2 id="examples">What it looks like</h2>
 
-Four common situations. Each snippet is a file in
+Four common situations. The code is the same on every adapter: each snippet is a file in
 [examples/front](https://github.com/fiber-interop/fiber-interop.github.io/tree/main/examples/front),
-run on phasync and Revolt.
+and the four files were run unchanged on phasync, Revolt, AMPHP and ReactPHP with identical output.
 
 <h3 class="ex">Three HTTP requests at once (Guzzle)</h3>
 
