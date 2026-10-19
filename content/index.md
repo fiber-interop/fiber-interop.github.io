@@ -23,28 +23,36 @@ use function async\{run, go, await_all};
 
 $client = async\guzzle\client(['base_uri' => 'https://api.example.com']);
 
-[$orders, $customer, $stock] = run(fn() => await_all([
-    go(fn() => json_decode((string) $client->get('/orders/42')->getBody(), true)),
-    go(fn() => json_decode((string) $client->get('/customers/7')->getBody(), true)),
-    go(fn() => json_decode((string) $client->get('/stock/A-100')->getBody(), true)),
-]));
+[$orders, $customer, $stock] = run(function () use ($client) {
+    $orders = go(fn() => (string) $client->get('/orders/42')->getBody());
+    $customer = go(fn() => (string) $client->get('/customers/7')->getBody());
+    $stock = go(fn() => (string) $client->get('/stock/A-100')->getBody());
+    return await_all([$orders, $customer, $stock]);
+});
+
+$orders = json_decode($orders, true);
+$customer = json_decode($customer, true);
+$stock = json_decode($stock, true);
 ```
 
-The three `get()` calls run in separate tasks and overlap; `await_all()` returns the three results under the same keys. If a task throws, `await_all()` lets every task settle and then rethrows the first exception, out of `run()`.
+The three `get()` calls run in separate tasks and overlap; `await_all()` returns the three response bodies in the order given. If a task throws, `await_all()` lets every task settle and then rethrows the first exception, out of `run()`.
 
 <h3 class="ex">Several database queries at once (PostgreSQL)</h3>
 
 ```php
 use function async\{run, go, await_all};
 
-$rows = run(fn() => await_all(array_map(
-    fn($id) => go(function () use ($id, $dsn) {
+$rows = run(function () use ($dsn) {
+    $query = function ($id) use ($dsn) {
         $c = async\pg\connect($dsn, PGSQL_CONNECT_FORCE_NEW);
         $r = async\pg\query_params($c, 'SELECT $1::int AS id, pg_sleep(0.3)', [$id]);
-        return $r === false ? pg_last_error($c) : pg_fetch_assoc($r);
-    }),
-    [1, 2, 3],
-)));
+        return pg_fetch_assoc($r);
+    };
+    $a = go(fn() => $query(1));
+    $b = go(fn() => $query(2));
+    $c = go(fn() => $query(3));
+    return await_all([$a, $b, $c]);
+});
 ```
 
 Three queries that each take 0.3 s finish in 0.3 s in total (local PostgreSQL, same on phasync and Revolt). One connection per task, because a connection runs one query at a time.
@@ -56,8 +64,16 @@ use function async\{run, go, await, sleep};
 use async\TimeoutException;
 
 run(function () {
-    $ticker = go(function () { for ($i = 1; $i <= 3; $i++) { sleep(0.05); echo "tick $i\n"; } });
-    $slow = go(function () { sleep(5); return 'slow result'; });
+    $ticker = go(function () {
+        for ($i = 1; $i <= 3; $i++) {
+            sleep(0.05);
+            echo "tick $i\n";
+        }
+    });
+    $slow = go(function () {
+        sleep(5);
+        return 'slow result';
+    });
     try {
         echo await($slow, 0.2), "\n";
     } catch (TimeoutException) {
@@ -76,7 +92,14 @@ use function async\{go, await_all, sleep};
 
 function fetchAll(array $ms): array
 {
-    return await_all(array_map(fn($m) => go(function () use ($m) { sleep($m / 1000); return "slept $m ms"; }), $ms));
+    $tasks = [];
+    foreach ($ms as $m) {
+        $tasks[] = go(function () use ($m) {
+            sleep($m / 1000);
+            return "slept $m ms";
+        });
+    }
+    return await_all($tasks);
 }
 ```
 
