@@ -414,7 +414,7 @@ logical operation, not state merely because it is global.**
 | `json_last_error()`, `preg_last_error()`, `error_get_last()` | the call just made | no: see below |
 | class statics, function statics, `$GLOBALS` | the application, shared on purpose | no |
 | `$_ENV`, `setlocale()`, `chdir()`, `umask()` | the process | no |
-| persistent resources: `PDO::ATTR_PERSISTENT`, `pg_pconnect()`, mysqli `p:` hosts, `pfsockopen()` | the process | no: see below |
+| persistent resources: `PDO::ATTR_PERSISTENT`, `pg_pconnect()`, mysqli `p:` hosts, `pfsockopen()` | the process, lent to one scope at a time | later, on its own: see below |
 
 Two rows deserve a word. Last-error state needs no scoping because fibers switch only at
 suspension points, and `json_decode()` followed by `json_last_error()` has none between them;
@@ -425,15 +425,20 @@ meaning of `static`. Techniques that virtualize them exist, for running unmodifi
 concurrently, and they are a compatibility measure, not a language semantic; this RFC and its
 follow-ups do not propose them.
 
-Persistent resources are process-wide too, and concurrency makes that visible. PHP keeps them in
+Persistent resources are process-wide, and concurrency makes that visible. PHP keeps them in
 `EG(persistent_list)`, keyed by DSN and user, and a second `new PDO()` with the same arguments gets
 the cached handle even while the first object is still live. With one request per process two such
 objects rarely coexist; with concurrent scopes they do, and they share one database session: a
-transaction begun in one scope covers writes made in another, and its rollback erases them. This
-RFC does not scope persistent resources. Code that serves concurrent scopes should not use them for
-anything with session state, and should use one non-persistent connection per scope instead, for
-example from a pool. Making the lookup aware of handles in use by another scope would be a
-compatibility measure for legacy code, like the virtualization techniques above, not part of this RFC.
+transaction begun in one scope covers writes made in another, and its rollback erases them.
+
+The rule should be that a persistent resource is never shared between scopes, while within one
+scope it behaves exactly as today. A lookup that finds the cached handle in use by another live
+scope opens a new one instead; when a scope ends, its handles return to the process for the next
+scope, after the same cleanup PHP does at the end of a request today. Code that never creates a
+scope runs in the root scope and sees no change, so the semantics of persistent connections stay
+what they are. This touches `ext/pdo`, `ext/pgsql`, `ext/mysqli` and the streams layer, so it is
+proposed as its own follow-up RFC rather than in this one. Until then, code serving concurrent
+scopes should use one non-persistent connection per scope, for example from a pool.
 
 ## Prior art
 
