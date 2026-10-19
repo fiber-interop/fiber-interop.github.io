@@ -211,5 +211,5 @@ One adapter installed is picked up automatically; with several, call `fiber\setu
 - [Library authors](tutorial-library.html): depend on `fiber-interop/api` instead of one event loop. Guzzle is the worked example.
 - [Containers](tutorial-container.html): scoped services per request when requests run concurrently.
 - [API reference](api.html): every function of `fiber-interop/api` with signature, behaviour and a runnable example.
-- [Runtimes](runtimes.html): Revolt, AMPHP, ReactPHP, Swoole, OpenSwoole, TrueAsync and phasync, with conformance status and known gaps.
+- [Runtimes](runtimes.html): Revolt, AMPHP, ReactPHP, Swoole, OpenSwoole, TrueAsync and phasync, with conformance status and notes.
 - [Integrations](integrations.html): every package above in detail.

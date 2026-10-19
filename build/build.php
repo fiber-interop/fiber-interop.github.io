@@ -231,7 +231,7 @@ if (!$conf) {
     $short = fn(string $r) => $r === 'reference' ? 'reference' : $nm($r);
     $sym = ['ok' => ['ok', 'ok'], 'fail' => ['fail', 'FAIL'], 'skipped' => ['skipped', 'skipped']];
     // summary
-    $sm = '<table class="summary"><thead><tr><th>Runtime</th><th>Library / extension version tested</th><th>PHP</th><th>Result</th><th>Scope state</th><th>Stress</th><th>Run at</th></tr></thead><tbody>';
+    $sm = '<table class="summary"><thead><tr><th>Runtime</th><th>Library / extension version tested</th><th>PHP</th><th>Result</th><th>Scope through native spawns</th><th>Stress</th><th>Run at</th></tr></thead><tbody>';
     $exc = [];
     $pk = ['api' => 'api', 'loop' => 'loop', 'raw_fiber' => 'raw fiber'];
     $probeExc = [];
@@ -240,9 +240,9 @@ if (!$conf) {
         $pr = $d['probes'] ?? [];
         $pv = fn(string $k) => $pr[$k] ?? 'not run';
         if ($pv('api') === 'not run' && $pv('loop') === 'not run' && $pv('raw_fiber') === 'not run') [$sc, $st] = ['skip', 'not run'];
-        elseif ($pv('api') !== 'ok') [$sc, $st] = ['bad', 'none'];
-        elseif ($pv('loop') === 'ok' && $pv('raw_fiber') === 'ok') [$sc, $st] = ['ok', 'full'];
-        else [$sc, $st] = ['warn', 'api-driven'];
+        elseif ($pv('api') !== 'ok') [$sc, $st] = ['bad', 'api probe failed'];
+        elseif ($pv('loop') === 'ok' && $pv('raw_fiber') === 'ok') [$sc, $st] = ['ok', 'yes'];
+        else [$sc, $st] = ['skip', 'no, via fiber\\go() only'];
         $res = $d['results'] ?? [];
         $tot = count($conf['examples']);
         $pass = count(array_keys($res, 'ok'));
@@ -273,14 +273,17 @@ if (!$conf) {
     // scope probes table
     $probeCell = function (array $p, string $k) use ($h, &$probeExc, &$cur) {
         $v = $p[$k] ?? 'not run';
-        $cls = ['ok' => 'ok', 'fail' => 'fail'][$v] ?? 'skipped';
+        $real = $k === 'api';
+        $cls = ['ok' => 'ok', 'fail' => $real ? 'fail' : 'skipped'][$v] ?? 'skipped';
         $title = '';
-        if ($v === 'fail') {
+        if ($v === 'fail' && $real) {
             $line = $p[$k . '_line'] ?? '';
             $title = ' title="' . $h($line) . '"';
             $probeExc[] = [$cur[0], $cur[1], $k, $line];
+        } elseif ($v === 'fail') {
+            $title = ' title="' . $h($p[$k . '_line'] ?? '') . '"';
         }
-        return "<td class=\"s $cls\"$title>" . ($v === 'fail' ? 'FAIL' : $v) . '</td>';
+        return "<td class=\"s $cls\"$title>" . ($v === 'fail' ? ($real ? 'FAIL' : 'no') : $v) . '</td>';
     };
     $pt = '<div class="scroll"><table class="matrix probes"><thead><tr><th rowspan="2">Runtime</th>';
     foreach ($pk as $label) $pt .= '<th colspan="2">' . $h($label) . '</th>';
@@ -298,6 +301,7 @@ if (!$conf) {
     }
     $pt .= '</tbody></table></div>';
     $sm .= '<h3>Scope probes</h3>'
+        . '<p>The ' . count($conf['examples']) . ' examples above are the conformance contract. The probes below are an extra measurement: whether Scope also follows code that uses the runtime\'s own API directly, without going through fiber-interop. A "no" there is a property of the runtime, not a failure.</p>'
         . '<p>Three standalone scripts per adapter show how far per-scope state (including superglobals) follows the code. <strong>api</strong> proves that code driven through the fiber-interop api keeps its scope; <strong>loop</strong> proves the same for code using the loop\'s own primitives; <strong>raw fiber</strong> proves that a plain <code>Fiber</code> keeps the scope of its creator.</p>'
         . '<p>A userland polyfill sees only the switches that pass through a hook it controls: everything under Revolt and AMPHP, callbacks but not <code>await()</code> under ReactPHP, nothing Swoole performs itself. Covering every switch needs the runtime: the engine for fibers (the case made in the <a href="' . RFC_URL . '">the Scope RFC (draft)</a>), and for Swoole the two switch hooks its core already has but does not expose to PHP. The ext-scope columns run the same probes with the native extension loaded. The extension provides the identity; per-scope superglobals are the RFC\'s secondary vote and are not in the extension yet, so <em>api</em> and <em>loop</em> fail there today and <em>raw fiber</em> passes. That is the measurement, not a defect of the extension.</p>'
         . $pt;
