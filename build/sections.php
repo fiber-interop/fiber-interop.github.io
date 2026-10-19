@@ -59,6 +59,18 @@ foreach ($api as $n => [$sig, $one, $beh, $exn]) {
     page("api-$n.html", "async\\$n()", $b, "$one Reference for async\\$n() in fiber-interop/api.");
 }
 
+// ---- Scope class page (public methods of fiber-interop/scope src/Scope.php, same style as the api-*.html pages)
+$sm = [
+ ['new Scope()', 'A new scope, starting with copies of its creator\'s (the current scope\'s) superglobals.'],
+ ['run(callable $callback, mixed ...$args): mixed', 'Call $callback with this scope as the current scope and return its result.'],
+ ['static getCurrent(): Scope', 'The current scope: the innermost run() of this fiber, else the root scope in {main} or the active scope in a fiber without a run() of its own.'],
+ ['static getRootScope(): Scope', 'The root scope: one object for the whole request, current in {main} outside any run().'],
+];
+$b = "<h1><code>Scope</code></h1>\n<p class=\"lead\">The identity of the request or job that code belongs to, kept across fibers. Global class <code>\\Scope</code>, from ext-scope or the <a href=\"scope.html\">polyfill</a>.</p>\n<table class=\"apilist\"><tbody>\n";
+foreach ($sm as [$sig, $one]) $b .= "<tr><td><code>" . $h($sig) . "</code></td><td>" . $h($one) . "</td></tr>\n";
+$b .= "</tbody></table>\n<p>Scopes cannot be cloned or serialized. <code>fiber_interop\\scope\\IS_POLYFILL</code> tells whether the class is the polyfill. See <a href=\"scope.html\">the Scope page</a> and <a href=\"tutorial-container.html\">scoped services</a>.</p>";
+page('api-Scope.html', 'Scope class', $b, 'Public methods of the Scope class: new Scope, run, getCurrent, getRootScope.');
+
 // ---- runtimes. status: conformance.json (20 examples, PHP 8.5.11, 2026-10-13) and phpunit run 2026-10-19; CI: none of the adapter repos has a workflow.
 $rt = [
  'revolt' => ['Revolt', 'https://revolt.run', 'revoltphp/event-loop', 'fiber-interop/revolt', 'Revolt is a PHP event loop built on fibers; AMPHP, and other libraries, run on it.',

@@ -101,9 +101,10 @@ function page(string $file, string $title, string $body, string $desc, bool $wid
     $groups = [
         'Home' => ['index.html' => 'Home'],
         'Get started' => ['get-started.html' => 'Get started'],
-        'Tutorials' => ['tutorial-library.html' => 'Library authors', 'tutorial-container.html' => 'Containers'],
+        'Tutorials' => ['tutorial-library.html' => 'Library authors'],
         'Integrations' => ['integrations.html' => 'Integrations'],
-        'Specification' => ['adapters.html' => 'Adapters', 'spec.html' => 'Specification', 'conformance.html' => 'Conformance', 'scope.html' => 'Scope', 'rfc-scope.html' => 'Scope RFC'],
+        'Specification' => ['adapters.html' => 'Adapters', 'spec.html' => 'Specification', 'conformance.html' => 'Conformance'],
+        'Scope' => ['scope.html' => 'Scope', 'tutorial-container.html' => 'Scoped services', 'api-Scope.html' => 'Scope class', 'rfc-scope.html' => 'RFC'],
     ];
     $groups['API'] = ['api.html' => 'Overview'] + array_combine(array_map(fn($n) => "api-$n.html", FI_API_FUNCS), FI_API_FUNCS);
     $groups['Runtimes'] = ['runtimes.html' => 'Overview'] + array_combine(array_map(fn($n) => "runtime-$n.html", array_keys(FI_RUNTIMES)), array_map(fn($r) => $r[0], FI_RUNTIMES));
@@ -211,6 +212,7 @@ page('adapters.html', 'Adapters', "<h1>Adapters</h1><p class=\"lead\">One packag
 
 // ---- scope
 $body = '<h1>Scope</h1><p class="lead">The identity of the operation code belongs to, an HTTP request or a job, preserved across fibers and generators.</p>'
+    . '<p>Scope is what lets an application or framework keep services per request, per user or per job while fibers interleave. Run each request in <code>(new Scope)->run(...)</code> and anything keyed by <code>Scope::getCurrent()</code> (a <code>WeakMap</code> of services, a container\'s <code>Lifetime::Scoped</code>, locale, timezone) is per request, with per-scope superglobals, without a separate worker mode. Library authors never touch it. Every fiber-interop runtime provides a global <code>\\Scope</code>: the extension natively, else the polyfill (<code>fiber_interop\\scope\\IS_POLYFILL</code> says which). phasync keeps it switched itself; the other adapters do it in the adapter.</p>'
     . '<p>Scope is proposed for PHP core in <a href="' . RFC_URL . '">the Scope RFC (draft)</a>. Today it is available as a native extension, <code>fiber-interop/ext-scope</code>, with a userland polyfill, <code>fiber-interop/scope</code>, for installs without the extension. The polyfill and the extension expose the same class; code written against one runs on the other.</p>'
     . '<h2>Install</h2><pre><code>composer require fiber-interop/scope</code></pre><p>Composer uses the extension when it is loaded and the polyfill otherwise.</p>'
     . '<h2>Polyfill (<code>fiber-interop/scope</code>)</h2>' . render($conv, source($arg, 'scope', 'README.md'), 'scope', 2, true)

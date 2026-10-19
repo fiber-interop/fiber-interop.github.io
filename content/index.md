@@ -8,7 +8,7 @@ installing one adapter package.</p>
 fiber-interop is young (0.x versions) and the [Scope RFC for php-src](rfc-scope.html) is a draft, so the
 API may change before 1.0.
 
-<nav class="toc" aria-label="On this page"><a href="#examples">Examples</a><a href="#api">API</a><a href="#measured">Measured</a><a href="#overlaps">What overlaps</a><a href="#adapter">Which adapter</a><a href="#constraints">Constraints</a><a href="#bootstrap">Bootstrapping</a><a href="#next">Next</a></nav>
+<nav class="toc" aria-label="On this page"><a href="#examples">Examples</a><a href="#api">API</a><a href="#scope">Scope</a><a href="#measured">Measured</a><a href="#overlaps">What overlaps</a><a href="#adapter">Which adapter</a><a href="#constraints">Constraints</a><a href="#bootstrap">Bootstrapping</a><a href="#next">Next</a></nav>
 
 <h2 id="examples">What it looks like</h2>
 
@@ -116,9 +116,27 @@ Eight functions cover most code; the [API reference](api.html) has signatures an
 - [`await_any($xs)`](api-await_any.html): wait for the first to finish.
 - [`sleep($s)`](api-sleep.html): pause this task only.
 - [`readable($stream)`](api-readable.html) / [`writable($stream)`](api-writable.html): wait until a stream can be read or written.
+- [`Scope`](scope.html): not a function but the other half of the API; one per request, so that anything keyed by `Scope::getCurrent()` is per request.
 
 This works in a controller, a command, a queue job or a service, in Laravel, Symfony, Slim,
 CodeIgniter or plain PHP; fiber-interop does not replace the framework.
+
+<h2 id="scope">One request, one Scope</h2>
+
+```php
+function session(): object              // one per request, in any fiber
+{
+    static $all;
+    $all ??= new WeakMap();
+    return $all[Scope::getCurrent()] ??= new stdClass();
+}
+
+// each request runs in its own Scope; session() never mixes them up
+go(fn() => (new Scope)->run(handle(...), $request1));
+go(fn() => (new Scope)->run(handle(...), $request2));
+```
+
+A request handled inside `(new Scope)->run(...)` has an identity that follows the code across fibers, so a registry like this, a container's `Lifetime::Scoped` services, the locale or the timezone become per request, with per-scope superglobals on top. Application authors without a framework get it directly, and framework authors can build on it instead of shipping a second "worker mode" runtime or a process per request. Library authors never see it: they call `async\go()` and the scope is carried along. Every runtime gets a global `\Scope`, the native extension or the polyfill. Runnable version: [examples/front/scope.php](https://github.com/fiber-interop/fiber-interop.github.io/blob/main/examples/front/scope.php), same output on phasync and Revolt. More on the [Scope page](scope.html) and in [scoped services](tutorial-container.html).
 
 <h2 id="measured">Measured: overlapping waiting time</h2>
 
@@ -184,8 +202,7 @@ only. If your application already runs on an event loop, install that loop's ada
 composer require fiber-interop/api fiber-interop/phasync fiber-interop/guzzle
 ```
 
-With exactly one adapter installed, it is picked up automatically and nothing else is needed. With several, call
-`async\setup(new FiberInterop\Revolt\Adapter())` (or the `Adapter` class of `phasync`, `amp`, `react`, `swoole`) once in your bootstrap. [Get started](get-started.html) has the details.
+One adapter installed is picked up automatically; with several, call `async\setup(new FiberInterop\Revolt\Adapter())` once. See [Get started](get-started.html).
 
 <h2 id="next">Next</h2>
 
