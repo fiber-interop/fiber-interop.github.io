@@ -48,6 +48,7 @@ function render(GithubFlavoredMarkdownConverter $conv, string $md, string $repo,
 @mkdir("$root/public", 0777, true);
 copy("$root/assets/style.css", "$root/public/style.css");
 copy("$root/assets/favicon.svg", "$root/public/favicon.svg");
+@mkdir("$root/public/assets/logos", 0777, true); foreach (glob("$root/assets/logos/*") as $lf) { copy($lf, "$root/public/assets/logos/" . basename($lf)); }
 
 $h = fn(string $s) => htmlspecialchars($s, ENT_QUOTES);
 

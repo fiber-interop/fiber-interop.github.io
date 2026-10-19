@@ -80,16 +80,18 @@ $rt = [
    '20/20', '35 tests, 41 assertions, OK', 'Exactly one <code>phasync::run()</code> exists, the outermost; <code>go()</code> from {main} returns a queued task and its <code>await()</code> wraps the run. Any api call outside <code>run()</code> throws <code>LogicException</code> (the api throws <code>NotInRunException</code> first). Services are cancelled when the outermost run finishes.',
    'No known gaps documented: phasync switches scope itself since 2.0.0-beta9 (also for raw <code>phasync::go()</code> coroutines), a foreign fiber waits by driving <code>EventLoop::tick()</code> in place, and nested <code>async\\run()</code> works.'],
 ];
+$logos = ['swoole' => '<img class="rt-logo" src="assets/logos/swoole.svg" alt="" width="128" height="44"> ', 'phasync' => '<img class="rt-logo" src="assets/logos/phasync.png" alt="" width="44" height="44"> '];
 $cards = '';
 foreach ($rt as $k => [$name, $site, $pkg, $ad, $what, $conf, $ut, $lim, $gap]) {
-    $cards .= "<div class=\"card rt rt-$k\"><a class=\"wordmark\" href=\"runtime-$k.html\">$name</a><p>$what</p><p class=\"meta\">Adapter: <code>$ad</code><br>Conformance: $conf<br><a href=\"runtime-$k.html\">Status and gaps</a> · <a href=\"$site\">$name site</a></p></div>\n";
+    $lg = $logos[$k] ?? '';
+    $cards .= "<div class=\"card rt rt-$k\"><a class=\"wordmark\" href=\"runtime-$k.html\">$lg$name</a><p>$what</p><p class=\"meta\">Adapter: <code>$ad</code><br>Conformance: $conf<br><a href=\"runtime-$k.html\">Status and gaps</a> · <a href=\"$site\">$name site</a></p></div>\n";
 }
 $body = "<h1>Runtimes</h1>\n<p class=\"lead\">The same program runs on each of these through one adapter package. Status below is read from each adapter's repository; where nothing is documented the page says so.</p>\n<div class=\"cards\">\n$cards</div>\n"
-  . "<p class=\"meta\">Conformance: the 20 examples of the conformance suite, snapshot of 2026-10-13 on PHP 8.5.11 (see the <a href=\"conformance.html\">matrix</a>). Colours are our own accents, wordmarks are plain text; see <code>assets/LOGOS.md</code>.</p>";
+  . "<p class=\"meta\">Conformance: the 20 examples of the conformance suite, snapshot of 2026-10-13 on PHP 8.5.11 (see the <a href=\"conformance.html\">matrix</a>). Logos are trademarks of their respective projects and are used to identify them; no endorsement is implied. Where no logo is shown, none was usable; accent colours are ours unless a logo gives one. See <code>assets/LOGOS.md</code>.</p>";
 page('runtimes.html', 'Runtimes', $body, 'Revolt, AMPHP, ReactPHP, Swoole, OpenSwoole and phasync: adapter, conformance status, limitations and gaps.');
 foreach ($rt as $k => [$name, $site, $pkg, $ad, $what, $conf, $ut, $lim, $gap]) {
     $inst = $k === 'openswoole' ? 'composer require fiber-interop/swoole   # with ext-openswoole loaded' : "composer require $ad";
-    $b = "<h1 class=\"wordmark rt rt-$k\">$name</h1>\n<p class=\"lead\">$what</p>\n<p><a href=\"$site\">$name project site</a> · adapter: <code>$ad</code></p>\n<pre><code>" . $h($inst) . "</code></pre>\n"
+    $b = "<h1 class=\"wordmark rt rt-$k\">" . ($logos[$k] ?? '') . "$name</h1>\n<p class=\"lead\">$what</p>\n<p><a href=\"$site\">$name project site</a> · adapter: <code>$ad</code></p>\n<pre><code>" . $h($inst) . "</code></pre>\n"
        . "<h2>Conformance and test status</h2>\n<table class=\"status\"><tbody><tr><th>Conformance examples (of 20)</th><td>$conf</td></tr><tr><th>Adapter unit tests (2026-10-19)</th><td>$ut</td></tr><tr><th>CI</th><td>The adapter repository has no CI workflow; the conformance numbers come from the site's snapshot (<code>conformance.json</code>, PHP 8.5.11)</td></tr><tr><th>Skipped</th><td>None in the conformance suite" . ($k === 'openswoole' ? ' (not run)' : '') . "</td></tr></tbody></table>\n"
        . "<h2>Known limitations</h2>\n<p>$lim</p>\n<h2>What the runtime would need to change to be fully fiber-interop compliant</h2>\n<p>$gap</p>\n"
        . '<p><a href="runtimes.html">All runtimes</a> · <a href="conformance.html">Conformance matrix</a></p>';
