@@ -185,7 +185,7 @@ only. If your application already runs on an event loop, install that loop's ada
 <div class="card"><h3>AMPHP</h3><p>Running on AMPHP? Tasks and AMPHP futures await each other.</p><code>fiber-interop/amp</code></div>
 <div class="card"><h3>ReactPHP</h3><p>Running on ReactPHP? Tasks and React promises await each other on React's loop.</p><code>fiber-interop/react</code></div>
 <div class="card"><h3>Swoole</h3><p>Running on Swoole or OpenSwoole? Uses Swoole's coroutines and runtime hooks.</p><code>fiber-interop/swoole</code></div>
-<div class="card"><h3>Quick start</h3><p>No event loop yet? phasync is a complete runtime with nothing else to configure, and its optional bundled extension also makes PHP's own blocking calls (<code>sleep()</code>, <code>curl_exec()</code>) cooperative. phasync 2 is in beta.</p><code>fiber-interop/phasync</code></div>
+<div class="card"><h3>Quick start</h3><p>No event loop yet? phasync is a complete runtime with nothing else to configure, and its optional extension (MIT, bundled with phasync or <code>pie install phasync/ext-phasync</code>) also makes PHP's own blocking calls (<code>sleep()</code>, <code>curl_exec()</code>) cooperative.</p><code>fiber-interop/phasync</code></div>
 </div>
 
 <h2 id="constraints">Constraints</h2>
