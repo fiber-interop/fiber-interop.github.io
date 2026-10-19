@@ -58,8 +58,13 @@ const FI_RUNTIMES = ['revolt'=>['Revolt'],'amp'=>['AMPHP'],'react'=>['ReactPHP']
 /** Highlight the ```php blocks of a page at build time with PHP's own tokenizer (no client-side JS). */
 function highlight_php_blocks(string $html): string
 {
-    return preg_replace_callback('~<pre><code class="language-php">(.*?)</code></pre>~s', function ($m) {
-        $src = htmlspecialchars_decode($m[1], ENT_QUOTES);
+    // Explicit ```php fences, and unlabelled fences whose content is evidently PHP (a README's
+    // ``` without a language); shell, ini and other labelled fences are left alone.
+    return preg_replace_callback('~<pre><code( class="language-php")?>(.*?)</code></pre>~s', function ($m) {
+        $src = htmlspecialchars_decode($m[2], ENT_QUOTES);
+        if ($m[1] === '' && !preg_match('~^\s*<\?php|\$[A-Za-z_]|->|::|\b(function|use function|namespace|return|new)\b~', $src)) {
+            return $m[0];
+        }
         $open = !str_contains($src, '<?php');
         $toks = token_get_all(($open ? '<?php ' : '') . $src);
         $kw = [T_FUNCTION, T_FN, T_RETURN, T_USE, T_NEW, T_CLASS, T_TRY, T_CATCH, T_FOREACH, T_FOR, T_IF, T_ELSE, T_STATIC, T_NAMESPACE, T_THROW, T_AS, T_ECHO, T_PUBLIC, T_PRIVATE, T_PROTECTED, T_CONST, T_EXTENDS, T_IMPLEMENTS, T_INTERFACE, T_FINALLY, T_MATCH, T_WHILE, T_ABSTRACT, T_FINAL, T_INSTANCEOF, T_CLONE, T_YIELD, T_CONTINUE, T_BREAK, T_FOREACH];

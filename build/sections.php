@@ -1,6 +1,6 @@
 <?php
 // API reference and Runtimes pages. Facts come from the docblocks in fiber-interop/api and the adapter READMEs; see content notes in each entry.
-$ex = fn(string $n) => '<pre><code>' . $h(rtrim(file_get_contents("$root/examples/api/$n.php"))) . '</code></pre>';
+$ex = fn(string $n) => '<pre><code class="language-php">' . $h(rtrim(file_get_contents("$root/examples/api/$n.php"))) . '</code></pre>';
 $p = fn(string ...$s) => implode("\n", array_map(fn($x) => "<p>$x</p>", $s));
 
 $api = [
@@ -52,7 +52,7 @@ foreach ($classes as [$n, $k, $d]) $body .= "<tr><td><code>async\\" . $h($n) . "
 $body .= "</tbody></table>\n";
 page('api.html', 'API', $body, 'Reference for every public function of fiber-interop/api: go, await, run, service, sleep and more.');
 foreach ($api as $n => [$sig, $one, $beh, $exn]) {
-    $b = "<h1><code>async\\$n()</code></h1>\n<p class=\"lead\">$one</p>\n<pre><code>" . $h("function async\\$sig") . "</code></pre>\n<h2>Behaviour</h2>\n$beh\n";
+    $b = "<h1><code>async\\$n()</code></h1>\n<p class=\"lead\">$one</p>\n<pre><code class=\"language-php\">" . $h("function async\\$sig") . "</code></pre>\n<h2>Behaviour</h2>\n$beh\n";
     $b .= $exn ? "<h2>Example</h2>\n<p class=\"meta\">Source: <code>examples/api/$exn.php</code>. Run on phasync and Revolt; the output is identical.</p>\n" . $ex($exn)
                : "<p class=\"meta\">No runnable example: adapter packages call this, applications do not.</p>\n";
     $b .= "<p><a href=\"api.html\">All functions</a></p>";
@@ -91,7 +91,7 @@ $body = "<h1>Runtimes</h1>\n<p class=\"lead\">The same program runs on each of t
 page('runtimes.html', 'Runtimes', $body, 'Revolt, AMPHP, ReactPHP, Swoole, OpenSwoole and phasync: adapter, conformance status, limitations and gaps.');
 foreach ($rt as $k => [$name, $site, $pkg, $ad, $what, $conf, $ut, $lim, $gap]) {
     $inst = $k === 'openswoole' ? 'composer require fiber-interop/swoole   # with ext-openswoole loaded' : "composer require $ad";
-    $b = "<h1 class=\"wordmark rt rt-$k\">" . ($logos[$k] ?? '') . "$name</h1>\n<p class=\"lead\">$what</p>\n<p><a href=\"$site\">$name project site</a> · adapter: <code>$ad</code></p>\n<pre><code>" . $h($inst) . "</code></pre>\n"
+    $b = "<h1 class=\"wordmark rt rt-$k\">" . ($logos[$k] ?? '') . "$name</h1>\n<p class=\"lead\">$what</p>\n<p><a href=\"$site\">$name project site</a> · adapter: <code>$ad</code></p>\n<pre><code class=\"language-php\">" . $h($inst) . "</code></pre>\n"
        . "<h2>Conformance and test status</h2>\n<table class=\"status\"><tbody><tr><th>Conformance examples (of 20)</th><td>$conf</td></tr><tr><th>Adapter unit tests (2026-10-19)</th><td>$ut</td></tr><tr><th>CI</th><td>The adapter repository has no CI workflow; the conformance numbers come from the site's snapshot (<code>conformance.json</code>, PHP 8.5.11)</td></tr><tr><th>Skipped</th><td>None in the conformance suite" . ($k === 'openswoole' ? ' (not run)' : '') . "</td></tr></tbody></table>\n"
        . "<h2>Known limitations</h2>\n<p>$lim</p>\n<h2>What the runtime would need to change to be fully fiber-interop compliant</h2>\n<p>$gap</p>\n"
        . '<p><a href="runtimes.html">All runtimes</a> · <a href="conformance.html">Conformance matrix</a></p>';
