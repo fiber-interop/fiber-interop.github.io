@@ -51,6 +51,9 @@ copy("$root/assets/favicon.svg", "$root/public/favicon.svg");
 
 $h = fn(string $s) => htmlspecialchars($s, ENT_QUOTES);
 
+const FI_API_FUNCS = ['setup','register','adapter','go','await','await_all','await_any','run','service','sleep','readable','writable'];
+const FI_RUNTIMES = ['revolt'=>['Revolt'],'amp'=>['AMPHP'],'react'=>['ReactPHP'],'swoole'=>['Swoole'],'openswoole'=>['OpenSwoole'],'phasync'=>['phasync']];
+
 function page(string $file, string $title, string $body, string $desc, bool $wide = false): void
 {
     global $root;
@@ -60,8 +63,10 @@ function page(string $file, string $title, string $body, string $desc, bool $wid
         'Get started' => ['get-started.html' => 'Get started'],
         'Tutorials' => ['tutorial-library.html' => 'Library authors', 'tutorial-container.html' => 'Containers'],
         'Integrations' => ['integrations.html' => 'Integrations'],
-        'Runtimes' => ['adapters.html' => 'Adapters', 'spec.html' => 'Specification', 'conformance.html' => 'Conformance', 'scope.html' => 'Scope', 'rfc-scope.html' => 'Scope RFC'],
+        'Specification' => ['adapters.html' => 'Adapters', 'spec.html' => 'Specification', 'conformance.html' => 'Conformance', 'scope.html' => 'Scope', 'rfc-scope.html' => 'Scope RFC'],
     ];
+    $groups['API'] = ['api.html' => 'Overview'] + array_combine(array_map(fn($n) => "api-$n.html", FI_API_FUNCS), FI_API_FUNCS);
+    $groups['Runtimes'] = ['runtimes.html' => 'Overview'] + array_combine(array_map(fn($n) => "runtime-$n.html", array_keys(FI_RUNTIMES)), array_map(fn($r) => $r[0], FI_RUNTIMES));
     // Leave out tutorial pages whose source is missing, so no link points at a page that was not built.
     foreach ($groups['Tutorials'] as $f => $t) {
         if (!is_file("$root/content/" . basename($f, '.html') . '.md')) unset($groups['Tutorials'][$f]);
@@ -287,3 +292,5 @@ if (!$conf) {
         . '<p>See <a href="spec.html">the specification</a> for what the conformance set does and does not prove.</p>';
     page('conformance.html', 'Conformance', $body, 'Conformance matrix of fiber-interop adapters.');
 }
+
+require __DIR__ . '/sections.php';

@@ -58,3 +58,17 @@ main h2[id]{scroll-margin-top:3rem}
 .card{border:1px solid var(--line);border-radius:6px;padding:.8rem 1rem;display:flex;flex-direction:column}
 .card h3{margin:0 0 .3rem}.card p{margin:0 0 .6rem;flex:1;font-size:.95rem}
 @media (max-width:600px){.lead{font-size:1.05rem}h1{font-size:1.6rem}h2{font-size:1.25rem}.bar{grid-template-columns:1fr 3.5rem}.bar-label{grid-column:1/-1}}
+/* accents: --accent for nav and section headings; --c per runtime card (our own choice of colours, see assets/LOGOS.md) */
+:root{--accent:#0f766e}
+@media (prefers-color-scheme:dark){:root{--accent:#2dd4bf}}
+nav a[aria-current]{text-decoration-color:var(--accent);text-decoration-thickness:2px}
+nav.sub{border-top-color:var(--accent)}
+main h2{border-left:4px solid var(--accent);padding-left:.6rem}
+.rt{--c:var(--accent)}
+.rt-revolt{--c:#e0532f}.rt-amp{--c:#2f7fd1}.rt-react{--c:#1f9e8f}.rt-swoole{--c:#8a5bd6}.rt-openswoole{--c:#d99a1e}.rt-phasync{--c:#c2417a}
+.card.rt{border-top:4px solid var(--c)}
+.wordmark{font-weight:800;font-size:1.35rem;letter-spacing:-.02em;color:var(--c)}
+h1.wordmark{font-size:2rem;margin-bottom:0}
+.apilist td:first-child{white-space:nowrap}
+.status td:nth-child(n+2),.status th:nth-child(n+2){font-size:.9rem}
+@media (max-width:600px){.apilist td:first-child{white-space:normal}.apilist,.status{display:block;overflow-x:auto}}

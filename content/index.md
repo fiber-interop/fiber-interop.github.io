@@ -104,4 +104,6 @@ With exactly one adapter installed, it is picked up automatically. With several,
 - [Get started](get-started.html): which adapter, a first program you can time, the functions you need, and what blocks.
 - [Library authors](tutorial-library.html): depend on `fiber-interop/api` instead of one event loop. Guzzle is the worked example.
 - [Containers](tutorial-container.html): scoped services per request when requests run concurrently.
+- [API reference](api.html): every function of `fiber-interop/api` with signature, behaviour and a runnable example.
+- [Runtimes](runtimes.html): Revolt, AMPHP, ReactPHP, Swoole, OpenSwoole and phasync, with conformance status and known gaps.
 - [Integrations](integrations.html): every package above in detail.
