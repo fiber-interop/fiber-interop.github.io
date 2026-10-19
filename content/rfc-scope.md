@@ -1,7 +1,7 @@
 # PHP RFC: Scope
 
-- Version: 0.6
-- Date: 2026-10-14
+- Version: 0.7
+- Date: 2026-10-19
 - Author: Frode Børli
 - Status: Draft
 - First Published at: (not yet published; intended location https://wiki.php.net/rfc/scope)
@@ -376,13 +376,7 @@ split inside it can be discussed on its own. Until then vote A isolates request 
 `REQUEST_METHOD` and the `HTTP_*` entries of `$_SERVER` stay shared, so vote A alone does not give
 complete isolation of HTTP requests.
 
-**Prototype.** The accompanying extension cannot change the engine's symbol-table handling, so
-the behaviour is prototyped in userland: the polyfill of the `Scope` class swaps the five arrays
-when an event loop reports a change of scope. The author maintains the interoperability project
-where this is implemented and measured across event loops
-(https://fiber-interop.github.io/conformance.html, column "Scope state"); the measurements show
-which loops can report every switch and which cannot, which is the case for doing it in the
-engine, where every switch is visible.
+**Reference implementation.** The accompanying extension implements this vote: the five arrays are swapped in the symbol table (and `PG(http_globals)`) at every scope change, a new scope takes copy-on-write references to its creator's arrays, and the lazily created auto-globals are forced at the first scope creation so a later-compiled `$_GET` read cannot re-arm the engine's JIT callback over a scope's array. It is on by default and can be turned off with `scope.superglobals=0` so this vote can be evaluated independently. The userland polyfill does the same when an event loop reports a change of scope; the interoperability project where this is measured across event loops (https://fiber-interop.github.io/conformance.html, column "Scope state") shows which loops can report every switch and which cannot, which is the case for doing it in the
 
 ### Secondary vote B: the default locale and timezone follow the scope
 
@@ -396,6 +390,8 @@ that scope, and code outside any scope sees no change. Inheritance is what makes
 for the common case, a sub-operation that formats dates for the request it belongs to, while a
 scope that needs its own setting changes it locally. The implementation is the same swap on
 switch: two words per switch.
+
+**Reference implementation.** The accompanying extension implements this vote too: the default timezone is one pointer swap of ext/date's current string per scope change; the locale, whose globals ext/intl does not expose to other extensions, is applied through the `intl.default_locale` ini entry only when the entering scope's locale differs from the live one (in core it would be the same plain swap as the timezone). `scope.locale_timezone=0` turns it off. Two details the text above leaves open, decided in the implementation and tested: `ini_set('date.timezone')` stays request-wide (a scope that has set its own timezone ignores it; one that never did follows it), and a scope created while the timezone is unset inherits "unset", that is the ini fallback, rather than a frozen value.
 
 The two are chosen because they are request-scoped by nature and because they are what unmodified
 applications (content management systems, frameworks) set per request today; without them such an
@@ -632,8 +628,7 @@ incompatible change.
 
 ## Patches and Tests
 
-An extension implementing this RFC on PHP 8.2 and later, and a pull request against php-src
-master, with tests, will accompany the RFC.
+An extension implementing this RFC, including both secondary votes, is released for PHP 8.2 to 8.5 as `fiber-interop/ext-scope` 0.3.0 (https://github.com/fiber-interop/ext-scope, `pie install fiber-interop/ext-scope`), with phpt tests for each rule in this text. A userland polyfill with the same class and tests is `fiber-interop/scope` 0.3.0. A pull request against php-src master will accompany the RFC before the vote.
 
 ## Implementation
 
