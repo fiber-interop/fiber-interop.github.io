@@ -37,14 +37,14 @@ final class StreamHandler
 
     private function waitWritable(): void
     {
-        if (\async\Registry::$active === []) {
+        if (\fiber\Registry::$active === []) {
             // No run(): block until writable, as a blocking stream would.
             $r = $e = null;
             $w = [$this->stream];
             \stream_select($r, $w, $e, null);
         } else {
             // Inside run(): suspend this task; the others keep running.
-            \async\writable($this->stream);
+            \fiber\writable($this->stream);
         }
     }
 }

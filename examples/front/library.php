@@ -1,6 +1,6 @@
 <?php
 require __DIR__ . '/vendor/autoload.php';
-use function async\{go, await_all, sleep};
+use function fiber\{go, await_all, sleep};
 
 // A library function: depends on fiber-interop/api only, imports no runtime.
 function fetchAll(array $ms): array
@@ -17,5 +17,5 @@ function fetchAll(array $ms): array
 
 // The application picks the runtime (here via runtime.php); the library is unchanged.
 $t = microtime(true);
-$r = async\run(fn() => fetchAll([200, 200, 200]));
+$r = fiber\run(fn() => fetchAll([200, 200, 200]));
 echo implode(', ', $r), ' in ', round(microtime(true) - $t, 1), " s\n";

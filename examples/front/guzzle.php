@@ -1,8 +1,8 @@
 <?php
 require __DIR__ . '/vendor/autoload.php';
-use function async\{run, go, await_all};
+use function fiber\{run, go, await_all};
 
-$client = async\guzzle\client(['base_uri' => getenv('FI_BASE') ?: 'http://127.0.0.1:18099']);
+$client = fiber\guzzle\client(['base_uri' => getenv('FI_BASE') ?: 'http://127.0.0.1:18099']);
 
 $t = microtime(true);
 [$orders, $customer, $stock] = run(function () use ($client) {

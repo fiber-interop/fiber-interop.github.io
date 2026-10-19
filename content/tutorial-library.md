@@ -2,7 +2,7 @@
 
 This page is for package maintainers. It shows how to make a library cooperative under any
 fiber-interop runtime while it keeps working, unchanged, for everyone who never calls
-`async\run()`. The examples are small first (a retry loop, a log handler) and then Guzzle, where the
+`fiber\run()`. The examples are small first (a retry loop, a log handler) and then Guzzle, where the
 work is done in [fiber-interop/guzzle](integrations.html).
 
 All code below is from [examples/library](https://github.com/fiber-interop/fiber-interop.github.io/tree/main/examples/library)
@@ -14,24 +14,24 @@ were within 10 ms.
 
 - Require `fiber-interop/api` and nothing else from fiber-interop. Never require an adapter: the
   application picks the runtime, and two libraries that each picked one would conflict.
-- Wherever the library would block, wait with `async\sleep()`, `async\readable()` or
-  `async\writable()` instead. Inside `async\run()` that suspends only the calling task; the other
+- Wherever the library would block, wait with `fiber\sleep()`, `fiber\readable()` or
+  `fiber\writable()` instead. Inside `fiber\run()` that suspends only the calling task; the other
   tasks keep running.
-- Outside `async\run()`, keep the old blocking call. The api functions throw
-  `async\NotInRunException` when no `run()` is active, so the library checks first and falls back.
+- Outside `fiber\run()`, keep the old blocking call. The api functions throw
+  `fiber\NotInRunException` when no `run()` is active, so the library checks first and falls back.
 
 The check is one line. The api has no public function for it yet; the fiber-interop packages
 (curl, pg, mysqli, guzzle) all read the run-frame registry directly, and so do the examples here:
 
 ```php
-if (\async\Registry::$active === []) {
+if (\fiber\Registry::$active === []) {
     // no run(): the old blocking call
 } else {
-    // inside run(): the async\ call
+    // inside run(): the fiber\ call
 }
 ```
 
-## A retry loop: `usleep()` to `async\sleep()`
+## A retry loop: `usleep()` to `fiber\sleep()`
 
 A typical retry helper sleeps between attempts. With `\usleep()` the whole process stops, so every
 other request in the same process waits too.
@@ -39,10 +39,10 @@ other request in the same process waits too.
 ```php
 function pause(float $seconds): void
 {
-    if (\async\Registry::$active === []) {
+    if (\fiber\Registry::$active === []) {
         \usleep((int) ($seconds * 1e6));   // no run(): behave as before
     } else {
-        \async\sleep($seconds);            // inside run(): suspend this task only
+        \fiber\sleep($seconds);            // inside run(): suspend this task only
     }
 }
 
@@ -69,8 +69,8 @@ foreach (['a', 'b', 'c'] as $n) {
     $r[] = job($n);
 }
 
-$r = async\run(fn() => async\await_all([
-    async\go(job(...), 'a'), async\go(job(...), 'b'), async\go(job(...), 'c'),
+$r = fiber\run(fn() => fiber\await_all([
+    fiber\go(job(...), 'a'), fiber\go(job(...), 'b'), fiber\go(job(...), 'c'),
 ]));
 ```
 
@@ -128,14 +128,14 @@ final class StreamHandler
 
     private function waitWritable(): void
     {
-        if (\async\Registry::$active === []) {
+        if (\fiber\Registry::$active === []) {
             // No run(): block until writable, as a blocking stream would.
             $r = $e = null;
             $w = [$this->stream];
             \stream_select($r, $w, $e, null);
         } else {
             // Inside run(): suspend this task; the others keep running.
-            \async\writable($this->stream);
+            \fiber\writable($this->stream);
         }
     }
 }
@@ -182,7 +182,7 @@ blocking client: three tasks that each call `$client->get()` take as long as thr
 [fiber-interop/guzzle](https://github.com/fiber-interop/guzzle) is one handler class. It follows the
 structure of `CurlHandler` (`CurlFactory::create()`, the transfer, `curl_errno()`,
 `CurlFactory::finish()`), so responses, exceptions and options are Guzzle's own. Only the transfer
-changes: outside `run()` it is `curl_exec()`, inside it is `async\curl\start()` from
+changes: outside `run()` it is `curl_exec()`, inside it is `fiber\curl\start()` from
 [fiber-interop/curl](integrations.html), and the promise's `wait()` awaits
 that. An excerpt from `src/Handler.php`:
 
@@ -190,7 +190,7 @@ that. An excerpt from `src/Handler.php`:
 public function __invoke(RequestInterface $request, array $options): PromiseInterface
 {
     HostValidator::assertRequestHost($request);
-    $inRun = \async\Registry::$active !== [];
+    $inRun = \fiber\Registry::$active !== [];
 
     if (!$inRun) {
         if (isset($options['delay'])) {
@@ -206,17 +206,17 @@ public function __invoke(RequestInterface $request, array $options): PromiseInte
     $easy = null;
     $begin = function () use ($request, $options, &$easy): object {
         $easy = $this->factory->create($request, $options);
-        return \async\curl\start($easy->handle);
+        return \fiber\curl\start($easy->handle);
     };
     $transfer = isset($options['delay']) && $options['delay'] > 0
-        ? \async\go(static function () use ($begin, $options) {
-            \async\sleep($options['delay'] / 1000);
-            return \async\await($begin());
+        ? \fiber\go(static function () use ($begin, $options) {
+            \fiber\sleep($options['delay'] / 1000);
+            return \fiber\await($begin());
         })
         : $begin();
 
     $promise = new Promise(function () use (&$promise, &$easy, $transfer): void {
-        \async\await($transfer);
+        \fiber\await($transfer);
         $easy->errno = \curl_errno($easy->handle);
         $promise->resolve(CurlFactory::finish($this, $easy, $this->factory));
     });
@@ -224,7 +224,7 @@ public function __invoke(RequestInterface $request, array $options): PromiseInte
 }
 ```
 
-The application passes it in once; `async\guzzle\client($config)` is
+The application passes it in once; `fiber\guzzle\client($config)` is
 `new Client($config + ['handler' => HandlerStack::create(new Handler())])`, so the middleware stack
 is the usual one.
 
@@ -233,20 +233,20 @@ is the usual one.
 
 ```php
 $stock = new GuzzleHttp\Client(['base_uri' => $base]);
-$fiber = async\guzzle\client(['base_uri' => $base]);
+$fiber = fiber\guzzle\client(['base_uri' => $base]);
 
-async\run(fn() => async\await_all([
-    async\go(fn() => (string) $fiber->get('/a')->getBody()),
-    async\go(fn() => (string) $fiber->get('/b')->getBody()),
-    async\go(fn() => (string) $fiber->get('/c')->getBody()),
+fiber\run(fn() => fiber\await_all([
+    fiber\go(fn() => (string) $fiber->get('/a')->getBody()),
+    fiber\go(fn() => (string) $fiber->get('/b')->getBody()),
+    fiber\go(fn() => (string) $fiber->get('/c')->getBody()),
 ]));
 ```
 
 ```
 stock Guzzle, outside run():                 0.91 s  hello from /a | hello from /b | hello from /c
-async\guzzle\client(), outside run():        0.90 s  hello from /a | hello from /b | hello from /c
+fiber\guzzle\client(), outside run():        0.90 s  hello from /a | hello from /b | hello from /c
 stock Guzzle, three tasks in run():          0.92 s  hello from /a | hello from /b | hello from /c
-async\guzzle\client(), three tasks in run(): 0.31 s  hello from /a | hello from /b | hello from /c
+fiber\guzzle\client(), three tasks in run(): 0.31 s  hello from /a | hello from /b | hello from /c
 ```
 
 Outside `run()` the two clients behave the same. Inside, the stock client serialises the three tasks
@@ -274,7 +274,7 @@ when two packages try it. It also changes behaviour for code that never asked fo
 
 With phasync's extension and with Swoole's native curl hook, `curl_exec()` itself is cooperative.
 Everywhere else fiber-interop/curl uses its generic driver, which polls one shared `curl_multi` handle
-with `async\sleep()` (1 ms after activity, backing off to 10 ms). That is the driver behind the
+with `fiber\sleep()` (1 ms after activity, backing off to 10 ms). That is the driver behind the
 numbers above. PHP exposes no file descriptor or socket callback for `curl_multi`, so there is
 nothing to hand to an event loop; a php-src change exposing `CURLMOPT_SOCKETFUNCTION` /
 `CURLMOPT_TIMERFUNCTION` (or a selectable fd) would remove the polling. See
@@ -283,13 +283,13 @@ nothing to hand to an event loop; a php-src change exposing `CURLMOPT_SOCKETFUNC
 ## Checklist
 
 - Require `fiber-interop/api` only. Put adapters in `require-dev`, never in `require`.
-- At each blocking point, check whether a `run()` is active; if so wait with `async\sleep()`,
-  `async\readable()` or `async\writable()`, otherwise keep the blocking call.
+- At each blocking point, check whether a `run()` is active; if so wait with `fiber\sleep()`,
+  `fiber\readable()` or `fiber\writable()`, otherwise keep the blocking call.
 - On non-blocking streams, handle partial writes and zero-byte writes.
 - Behaviour outside `run()` stays identical: same results, same errors, same blocking.
 - Where the library has a pluggable transport or handler, extend through it; do not replace the
   library's classes.
 - Test with every adapter. The fiber-interop packages' CI runs the suite once per runtime with
   `FI_RUNTIME=revolt|amp|react|phasync|swoole`, and the test bootstrap calls
-  `async\setup(new ('FiberInterop\\' . ucfirst($runtime) . '\\Adapter')())`. Run the suite once
+  `fiber\setup(new ('FiberInterop\\' . ucfirst($runtime) . '\\Adapter')())`. Run the suite once
   without any `run()` as well. See [Adapters](adapters.html) and the [specification](spec.html).

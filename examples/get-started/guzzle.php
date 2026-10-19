@@ -1,9 +1,9 @@
 <?php
 require __DIR__ . '/vendor/autoload.php';
 
-use function async\{run, go, await_all};
+use function fiber\{run, go, await_all};
 
-$client = async\guzzle\client(['base_uri' => 'http://127.0.0.1:8080']);
+$client = fiber\guzzle\client(['base_uri' => 'http://127.0.0.1:8080']);
 
 $t = microtime(true);
 $bodies = run(fn() => await_all(array_map(

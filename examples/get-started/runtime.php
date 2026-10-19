@@ -3,4 +3,4 @@
 // An application installs one adapter and needs nothing like this.
 $runtime = getenv('FI_RUNTIME') ?: 'phasync';
 $class = 'FiberInterop\\' . ucfirst($runtime) . '\\Adapter';
-async\setup(new $class());
+fiber\setup(new $class());

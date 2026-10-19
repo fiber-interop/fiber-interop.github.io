@@ -1,7 +1,7 @@
 <?php
 require __DIR__ . '/vendor/autoload.php';
 require __DIR__ . '/runtime.php';
-use function async\{run, go, await_all, sleep};
+use function fiber\{run, go, await_all, sleep};
 
 // One instance of each service per request, keyed by the current Scope.
 function session(): object

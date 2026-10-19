@@ -4,10 +4,10 @@
 //   composer install && FI_RUNTIME=phasync|revolt|amp|react php demo.php
 require __DIR__ . '/vendor/autoload.php';
 
-use function async\{await_all, go, run, sleep};
+use function fiber\{await_all, go, run, sleep};
 
 $runtime = getenv('FI_RUNTIME') ?: 'phasync';
-async\setup(new ('FiberInterop\\' . ucfirst($runtime) . '\\Adapter')());
+fiber\setup(new ('FiberInterop\\' . ucfirst($runtime) . '\\Adapter')());
 echo "runtime: $runtime\n";
 
 final class Logger         // Singleton: shared by all requests, holds no request data

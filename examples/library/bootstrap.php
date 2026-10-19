@@ -4,8 +4,8 @@ require __DIR__ . '/vendor/autoload.php';
 
 $runtime = getenv('FI_RUNTIME') ?: 'phasync';
 $class = 'FiberInterop\\' . ucfirst($runtime) . '\\Adapter';
-async\setup(new $class());
-if (async\curl\Registry::$candidates === []) {
-    async\curl\setup(new async\curl\MultiDriver());
+fiber\setup(new $class());
+if (fiber\curl\Registry::$candidates === []) {
+    fiber\curl\setup(new fiber\curl\MultiDriver());
 }
 fwrite(STDERR, "runtime=$runtime\n");

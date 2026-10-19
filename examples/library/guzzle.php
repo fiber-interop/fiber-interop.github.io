@@ -18,9 +18,9 @@ $time = function (string $label, callable $f) {
 };
 
 $stock = new GuzzleHttp\Client(['base_uri' => $base]);
-$fiber = async\guzzle\client(['base_uri' => $base]);
+$fiber = fiber\guzzle\client(['base_uri' => $base]);
 
-foreach (['stock Guzzle' => $stock, 'async\guzzle\client()' => $fiber] as $name => $client) {
+foreach (['stock Guzzle' => $stock, 'fiber\guzzle\client()' => $fiber] as $name => $client) {
     $time("$name, outside run():", fn() => [
         (string) $client->get('/a')->getBody(),
         (string) $client->get('/b')->getBody(),
@@ -28,14 +28,14 @@ foreach (['stock Guzzle' => $stock, 'async\guzzle\client()' => $fiber] as $name 
     ]);
 }
 
-$time('stock Guzzle, three tasks in run():', fn() => async\run(fn() => async\await_all([
-    async\go(fn() => (string) $stock->get('/a')->getBody()),
-    async\go(fn() => (string) $stock->get('/b')->getBody()),
-    async\go(fn() => (string) $stock->get('/c')->getBody()),
+$time('stock Guzzle, three tasks in run():', fn() => fiber\run(fn() => fiber\await_all([
+    fiber\go(fn() => (string) $stock->get('/a')->getBody()),
+    fiber\go(fn() => (string) $stock->get('/b')->getBody()),
+    fiber\go(fn() => (string) $stock->get('/c')->getBody()),
 ])));
 
-$time('async\guzzle\client(), three tasks in run():', fn() => async\run(fn() => async\await_all([
-    async\go(fn() => (string) $fiber->get('/a')->getBody()),
-    async\go(fn() => (string) $fiber->get('/b')->getBody()),
-    async\go(fn() => (string) $fiber->get('/c')->getBody()),
+$time('fiber\guzzle\client(), three tasks in run():', fn() => fiber\run(fn() => fiber\await_all([
+    fiber\go(fn() => (string) $fiber->get('/a')->getBody()),
+    fiber\go(fn() => (string) $fiber->get('/b')->getBody()),
+    fiber\go(fn() => (string) $fiber->get('/c')->getBody()),
 ])));

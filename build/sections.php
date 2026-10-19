@@ -4,7 +4,7 @@ $ex = fn(string $n) => '<pre><code class="language-php">' . $h(rtrim(file_get_co
 $p = fn(string ...$s) => implode("\n", array_map(fn($x) => "<p>$x</p>", $s));
 
 $api = [
- 'setup' => ['setup(Adapter $adapter): void', 'Install the adapter that serves the async\\ functions.',
+ 'setup' => ['setup(Adapter $adapter): void', 'Install the adapter that serves the fiber\\ functions.',
   $p('Calling it again with an adapter of the same class is a no-op (the first one stays). An adapter of another class throws <code>\\LogicException</code> naming both. An explicit <code>setup()</code> wins over registered candidates.',
      'Adapter packages register themselves on Composer autoload, so an application with one adapter installed never calls this. It is for choosing between several installed adapters.'), 'setup'],
  'register' => ['register(callable $factory, string $package): void', 'Offer an adapter as a candidate (called by adapter packages).',
@@ -40,23 +40,23 @@ $classes = [
  ['TimeoutException', 'interface', 'Thrown by await*, readable() and writable() when the timeout expires. The awaited task keeps running.'],
  ['Timeout', 'class', 'The TimeoutException used when the adapter\'s loop has no native timeout exception.'],
  ['CancelledException', 'interface', 'Thrown by sleep() and the waits when the owning loop cancels the task. Loops implement it on their own exception class.'],
- ['NotInRunException', 'class (extends LogicException)', 'Thrown by go(), await(), sleep() and the other waits when no async\\run() is active.'],
+ ['NotInRunException', 'class (extends LogicException)', 'Thrown by go(), await(), sleep() and the other waits when no fiber\\run() is active.'],
  ['NotConfiguredException', 'class (extends LogicException)', 'No adapter is set up, or several are installed and setup() was not called.'],
  ['RejectedException', 'class (extends RuntimeException)', 'A promise was rejected with a reason that is not a Throwable; getReason() returns it unchanged.'],
  ['Deferred, Frame', 'internal', 'Not public API. Deferred is a minimal then-able used by await_any(); Frame tracks the tasks of one run().'],
 ];
-$body = "<h1>API reference</h1>\n<p class=\"lead\">Everything lives in the <code>async\\</code> namespace of <a href=\"https://github.com/fiber-interop/api\">fiber-interop/api</a>; no global names are declared. Every page here is derived from the docblocks and code of that package, and every example runs on phasync and Revolt.</p>\n<h2>Functions</h2>\n<table class=\"apilist\"><tbody>\n";
+$body = "<h1>API reference</h1>\n<p class=\"lead\">Everything lives in the <code>fiber\\</code> namespace of <a href=\"https://github.com/fiber-interop/api\">fiber-interop/api</a>; no global names are declared. Every page here is derived from the docblocks and code of that package, and every example runs on phasync and Revolt.</p>\n<h2>Functions</h2>\n<table class=\"apilist\"><tbody>\n";
 foreach ($api as $n => [$sig, $one]) $body .= "<tr><td><a href=\"api-$n.html\"><code>$n()</code></a></td><td>$one</td></tr>\n";
 $body .= "</tbody></table>\n<h2>Classes, interfaces and exceptions</h2>\n<table class=\"apilist\"><tbody>\n";
-foreach ($classes as [$n, $k, $d]) $body .= "<tr><td><code>async\\" . $h($n) . "</code><br><small class=\"meta\">$k</small></td><td>" . $h($d) . "</td></tr>\n";
+foreach ($classes as [$n, $k, $d]) $body .= "<tr><td><code>fiber\\" . $h($n) . "</code><br><small class=\"meta\">$k</small></td><td>" . $h($d) . "</td></tr>\n";
 $body .= "</tbody></table>\n";
 page('api.html', 'API', $body, 'Reference for every public function of fiber-interop/api: go, await, run, service, sleep and more.');
 foreach ($api as $n => [$sig, $one, $beh, $exn]) {
-    $b = "<h1><code>async\\$n()</code></h1>\n<p class=\"lead\">$one</p>\n<pre><code class=\"language-php\">" . $h("function async\\$sig") . "</code></pre>\n<h2>Behaviour</h2>\n$beh\n";
+    $b = "<h1><code>fiber\\$n()</code></h1>\n<p class=\"lead\">$one</p>\n<pre><code class=\"language-php\">" . $h("function fiber\\$sig") . "</code></pre>\n<h2>Behaviour</h2>\n$beh\n";
     $b .= $exn ? "<h2>Example</h2>\n<p class=\"meta\">Source: <code>examples/api/$exn.php</code>. Run on phasync and Revolt; the output is identical.</p>\n" . $ex($exn)
                : "<p class=\"meta\">No runnable example: adapter packages call this, applications do not.</p>\n";
     $b .= "<p><a href=\"api.html\">All functions</a></p>";
-    page("api-$n.html", "async\\$n()", $b, "$one Reference for async\\$n() in fiber-interop/api.");
+    page("api-$n.html", "fiber\\$n()", $b, "$one Reference for fiber\\$n() in fiber-interop/api.");
 }
 
 // ---- Scope class page (public methods of fiber-interop/scope src/Scope.php, same style as the api-*.html pages)
@@ -80,17 +80,17 @@ $rt = [
    '20/20', '22 tests, 39 assertions, OK', 'The in-place wait for a foreign fiber reads Revolt driver internals by reflection, as the Revolt adapter does, so it is tied to Revolt 1.x.',
    'Documented: Revolt has no hook that runs when the loop hands control to user code, so the adapter installs a decorating driver via <code>EventLoop::setDriver()</code> to call <code>fiber_interop\\scope\\activate()</code>. A scope or resume hook in Revolt would replace the decorator. Probes <code>scope-api.php</code> and <code>scope-loop.php</code> pass; <code>scope-loop</code> fails if the decorator is removed.'],
  'react' => ['ReactPHP', 'https://reactphp.org', 'react/event-loop, react/async, react/promise', 'fiber-interop/react', 'ReactPHP is an event-driven, non-blocking I/O toolkit for PHP; react/async provides fiber-based <code>async()</code> and <code>await()</code>.',
-   '20/20', '17 tests, 28 assertions, OK', 'Probe <code>scope-loop.php</code> fails by design of React: with raw <code>React\\Async\\await()</code>, per-scope superglobals can show the previously active scope\'s values after a wait. Waiting through <code>async\\sleep()</code> / <code>async\\await()</code> is safe. In-place waits from a foreign fiber started inside a running loop callback throw <code>LogicException</code> because the loop cannot be re-entered.',
+   '20/20', '17 tests, 28 assertions, OK', 'Probe <code>scope-loop.php</code> fails by design of React: with raw <code>React\\Async\\await()</code>, per-scope superglobals can show the previously active scope\'s values after a wait. Waiting through <code>fiber\\sleep()</code> / <code>fiber\\await()</code> is safe. In-place waits from a foreign fiber started inside a running loop callback throw <code>LogicException</code> because the loop cannot be re-entered.',
    'Documented ask from the adapter README: a resume hook in react/async (a callback run in the target fiber, or around <code>$fiber->resume()</code>, in <code>SimpleFiber</code>/<code>await()</code>), or routing <code>await()</code> through a suspension object that user-visible code returns from, as Revolt\'s <code>Suspension::suspend()</code> does. Re-entrant <code>Loop::run()</code> is the other gap.'],
  'swoole' => ['Swoole', 'https://swoole.com', 'ext-swoole 6.x', 'fiber-interop/swoole', 'Swoole is a PHP extension providing coroutines, an event loop and async I/O. Its coroutines are not PHP Fibers.',
-   '20/20', 'phpunit not runnable in the verification shell (the extension is not loaded there); conformance snapshot ran with the extension', 'Needs ext-swoole 6.x (developed against 6.3.0RC1, PHP 8.5 NTS). <code>Fiber::getCurrent()</code> is null in every coroutine, so per-coroutine scopes use a context-keyed provider with the userland polyfill; the ext-scope C extension cannot see coroutine switches, so use the polyfill. Probe <code>scope-loop.php</code> fails as expected: a coroutine that Swoole itself resumes (no <code>async\\</code> call) sees the scope that was active last. A service that catches the cancellation and keeps going keeps <code>Co\\run()</code> open.',
+   '20/20', 'phpunit not runnable in the verification shell (the extension is not loaded there); conformance snapshot ran with the extension', 'Needs ext-swoole 6.x (developed against 6.3.0RC1, PHP 8.5 NTS). <code>Fiber::getCurrent()</code> is null in every coroutine, so per-coroutine scopes use a context-keyed provider with the userland polyfill; the ext-scope C extension cannot see coroutine switches, so use the polyfill. Probe <code>scope-loop.php</code> fails as expected: a coroutine that Swoole itself resumes (no <code>fiber\\</code> call) sees the scope that was active last. A service that catches the cancellation and keeps going keeps <code>Co\\run()</code> open.',
    'Documented: Swoole has no userland coroutine-switch hook, so the adapter calls <code>activate()</code> at every point where it regains control. A switch hook in Swoole would make raw coroutines scope-correct. Nothing else is documented.'],
  'openswoole' => ['OpenSwoole', 'https://openswoole.com', 'ext-openswoole', 'fiber-interop/swoole (shared)', 'OpenSwoole is a PHP extension for coroutines and async I/O that forked from Swoole and shares its API surface.',
    'not in the published snapshot', 'no separate adapter', 'There is no separate OpenSwoole adapter. The swoole adapter README states it requires ext-swoole 6.x <em>or</em> ext-openswoole (tested 26.2.0); its probes give the same results on Swoole 6.3 and OpenSwoole 26.2. The site\'s <code>conformance.php</code> has an <code>only=openswoole</code> mode for CI, but the committed snapshot has no OpenSwoole entry, so no conformance number is published here.',
    'Not assessed beyond the above: the adapter for Swoole is documented to work on OpenSwoole 26.2 unchanged, and the same missing coroutine-switch hook applies. A dedicated adapter would be the same code against the same API (<code>Coroutine</code>, <code>Channel</code>, <code>Co\\run</code>, context-keyed scope provider); this was read from the swoole README, not tested separately.'],
  'phasync' => ['phasync', 'https://phasync.dev', 'phasync/phasync', 'fiber-interop/phasync', 'phasync is a PHP library for fiber-based concurrency with its own event loop, coroutines and services.',
    '20/20', '35 tests, 41 assertions, OK', 'None known.',
-   'None: phasync switches scope itself since 2.0.0-beta9 (also for raw <code>phasync::go()</code> coroutines), a foreign fiber waits by driving <code>EventLoop::tick()</code> in place, and <code>phasync::run()</code> nests freely — a library may call it whenever it needs the loop, and inside a parent run it cooperates with that run\'s coroutines (a route for making an application fiber-aware gradually, also under PHP-FPM). Only the outermost run is unique; the adapter issues it when <code>async\\run()</code> is entered from {main}.'],
+   'None: phasync switches scope itself since 2.0.0-beta9 (also for raw <code>phasync::go()</code> coroutines), a foreign fiber waits by driving <code>EventLoop::tick()</code> in place, and <code>phasync::run()</code> nests freely — a library may call it whenever it needs the loop, and inside a parent run it cooperates with that run\'s coroutines (a route for making an application fiber-aware gradually, also under PHP-FPM). Only the outermost run is unique; the adapter issues it when <code>fiber\\run()</code> is entered from {main}.'],
 ];
 $logos = ['swoole' => '<img class="rt-logo" src="assets/logos/swoole.svg" alt="" width="128" height="44"> ', 'phasync' => '<img class="rt-logo" src="assets/logos/phasync.png" alt="" width="44" height="44"> '];
 $cards = '';

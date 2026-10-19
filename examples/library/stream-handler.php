@@ -47,18 +47,18 @@ report('outside run():', $log, $pipes, $proc, $t);
 $t = microtime(true);
 $proc = slowReader($pipes);
 $log = new StreamHandler($pipes[0]);
-$ticks = async\run(function () use ($log, $lines) {
+$ticks = fiber\run(function () use ($log, $lines) {
     $done = false;
-    $ticker = async\go(function () use (&$done) {
+    $ticker = fiber\go(function () use (&$done) {
         $n = 0;
         while (!$done) {
-            async\sleep(0.01);
+            fiber\sleep(0.01);
             $n++;
         }
         return $n;
     });
     logLines($log, $lines);
     $done = true;
-    return async\await($ticker);
+    return fiber\await($ticker);
 });
 report('inside run(): ', $log, $pipes, $proc, $t, ", other task ticked $ticks times meanwhile");

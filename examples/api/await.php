@@ -1,7 +1,7 @@
 <?php
 require __DIR__ . '/vendor/autoload.php';
-use function async\{run, go, await, sleep};
-use async\TimeoutException;
+use function fiber\{run, go, await, sleep};
+use fiber\TimeoutException;
 echo run(fn() => await(go(fn() => 6 * 7))), "\n";
 run(function () {
     $t = go(function () { sleep(0.3); return 'done'; });

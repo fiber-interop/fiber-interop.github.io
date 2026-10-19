@@ -1,7 +1,7 @@
 <?php
 require __DIR__ . '/vendor/autoload.php';
 
-use function async\{run, go, await, await_all, sleep};
+use function fiber\{run, go, await, await_all, sleep};
 
 $t = microtime(true);
 run(function () use ($t) {

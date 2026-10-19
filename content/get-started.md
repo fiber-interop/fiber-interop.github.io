@@ -3,7 +3,9 @@
 ## Which adapter do I install?
 
 Your application installs `fiber-interop/api` and exactly one adapter. The adapter decides which
-event loop runs your tasks; code written against `async\...` does not change when you switch.
+event loop runs your tasks; code written against `fiber\...` does not change when you switch.
+
+The functions live in the `fiber\` namespace (before 0.3 they were in `async\`, which collides with TrueAsync's `Async\`).
 
 | Your application | Install |
 |---|---|
@@ -15,7 +17,7 @@ event loop runs your tasks; code written against `async\...` does not change whe
 
 `fiber-interop/api` is what libraries depend on. The adapter is the application's choice, one per
 application: with exactly one adapter installed it is picked up automatically. With several,
-`async\run()` throws until you call `async\setup()` with the one you want.
+`fiber\run()` throws until you call `fiber\setup()` with the one you want.
 Details per adapter: [Adapters](adapters.html).
 
 ## First program
@@ -30,9 +32,9 @@ composer require fiber-interop/api fiber-interop/phasync fiber-interop/guzzle
 <?php
 require __DIR__ . '/vendor/autoload.php';
 
-use function async\{run, go, await_all};
+use function fiber\{run, go, await_all};
 
-$client = async\guzzle\client(['base_uri' => 'http://127.0.0.1:8080']);
+$client = fiber\guzzle\client(['base_uri' => 'http://127.0.0.1:8080']);
 
 $t = microtime(true);
 $bodies = run(fn() => await_all(array_map(
@@ -45,23 +47,23 @@ printf("%d responses in %.2f s\n", count($bodies), microtime(true) - $t);
 Against an endpoint that answers after 0.3 s this prints `10 responses in 0.33 s` (phasync) or
 `0.32 s` (Revolt, AMPHP, ReactPHP); the same ten requests one after another take 3.02 s. Measured on
 2026-10-14 with PHP 8.5.11 on Linux, Intel Xeon E5-2697 v3, against a local `php -S` server with 16
-workers. `async\guzzle\client()` returns an ordinary `GuzzleHttp\Client`; only its handler differs.
+workers. `fiber\guzzle\client()` returns an ordinary `GuzzleHttp\Client`; only its handler differs.
 
 ## The words you need
 
 | Function | What it does |
 |---|---|
-| `async\run($f)` | Runs `$f` with the event loop and returns its result once `$f` and every task it started have finished. Your entry point. |
-| `async\go($f)` | Starts `$f` as a task and returns an awaitable at once. |
-| `async\await($task)` | Suspends the current task until `$task` is done; returns its result or throws its exception. |
-| `async\await_all($tasks)` | Awaits an array of tasks and returns their results with the same keys. |
-| `async\sleep($seconds)` | Pauses the current task only; other tasks keep running. |
+| `fiber\run($f)` | Runs `$f` with the event loop and returns its result once `$f` and every task it started have finished. Your entry point. |
+| `fiber\go($f)` | Starts `$f` as a task and returns an awaitable at once. |
+| `fiber\await($task)` | Suspends the current task until `$task` is done; returns its result or throws its exception. |
+| `fiber\await_all($tasks)` | Awaits an array of tasks and returns their results with the same keys. |
+| `fiber\sleep($seconds)` | Pauses the current task only; other tasks keep running. |
 
 ```php
 <?php
 require __DIR__ . '/vendor/autoload.php';
 
-use function async\{run, go, await, await_all, sleep};
+use function fiber\{run, go, await, await_all, sleep};
 
 $t = microtime(true);
 run(function () use ($t) {
@@ -83,11 +85,11 @@ cooperative packages that work on every adapter: [Integrations](integrations.htm
 
 ## Outside run() nothing changes
 
-Outside `async\run()` the integration packages are plain blocking PHP and behave exactly like the
-library they wrap: two requests with `async\guzzle\client()` outside `run()` take 0.61 s, as they
+Outside `fiber\run()` the integration packages are plain blocking PHP and behave exactly like the
+library they wrap: two requests with `fiber\guzzle\client()` outside `run()` take 0.61 s, as they
 would with a plain Guzzle client. You can adopt fiber-interop one code path at a time. The
-`async\*` primitives themselves (`go`, `await`, `sleep`, ...) need a running loop; called outside
-`run()` they throw `async\NotInRunException`.
+`fiber\*` primitives themselves (`go`, `await`, `sleep`, ...) need a running loop; called outside
+`run()` they throw `fiber\NotInRunException`.
 
 ## What blocks anyway
 
@@ -96,13 +98,13 @@ tasks, each waiting 0.3 s:
 
 | Call in each task | Two tasks take |
 |---|---|
-| `async\sleep(0.3)` | 0.30 s |
+| `fiber\sleep(0.3)` | 0.30 s |
 | native `usleep(300_000)` (same for `sleep()`) | 0.60 s |
 | `file_get_contents('http://...')` | 0.60 s |
 
 Also blocking: PDO (`pdo_mysql`, `pdo_pgsql`; use the `mysqli`, `pg` or `dbal` packages instead),
-`curl_exec()` (use `async\curl\exec()`), `stream_socket_client()` and other stream functions used
-without `async\readable()` / `async\writable()`, and DNS lookups. The phasync extension and Swoole's
+`curl_exec()` (use `fiber\curl\exec()`), `stream_socket_client()` and other stream functions used
+without `fiber\readable()` / `fiber\writable()`, and DNS lookups. The phasync extension and Swoole's
 runtime hooks make some built-in calls cooperative; see [Adapters](adapters.html) for what each
 covers. The numbers above are from the Revolt and phasync adapters without the extension.
 

@@ -1,7 +1,7 @@
 <?php
 require __DIR__ . '/vendor/autoload.php';
-use function async\{run, go, await, sleep, readable};
-use async\TimeoutException;
+use function fiber\{run, go, await, sleep, readable};
+use fiber\TimeoutException;
 run(function () {
     [$r, $w] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
     stream_set_blocking($r, false);

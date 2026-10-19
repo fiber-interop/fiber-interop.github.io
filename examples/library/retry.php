@@ -4,10 +4,10 @@ require __DIR__ . '/bootstrap.php';
 // --- library code -------------------------------------------------------------------------
 function pause(float $seconds): void
 {
-    if (\async\Registry::$active === []) {
+    if (\fiber\Registry::$active === []) {
         \usleep((int) ($seconds * 1e6));   // no run(): behave as before
     } else {
-        \async\sleep($seconds);            // inside run(): suspend this task only
+        \fiber\sleep($seconds);            // inside run(): suspend this task only
     }
 }
 
@@ -44,7 +44,7 @@ foreach (['a', 'b', 'c'] as $n) {
 printf("outside run(): %s in %.2f s\n", implode(', ', $r), microtime(true) - $t);
 
 $t = microtime(true);
-$r = async\run(fn() => async\await_all([
-    async\go(job(...), 'a'), async\go(job(...), 'b'), async\go(job(...), 'c'),
+$r = fiber\run(fn() => fiber\await_all([
+    fiber\go(job(...), 'a'), fiber\go(job(...), 'b'), fiber\go(job(...), 'c'),
 ]));
 printf("inside run():  %s in %.2f s\n", implode(', ', $r), microtime(true) - $t);

@@ -1,13 +1,13 @@
 <?php
 require __DIR__ . '/vendor/autoload.php';
-use function async\{run, go, await_all};
+use function fiber\{run, go, await_all};
 
 $dsn = getenv('FI_PG') ?: 'host=127.0.0.1 port=15432 user=fi password=fi dbname=fi';
 $t = microtime(true);
 $rows = run(function () use ($dsn) {
     $query = function ($id) use ($dsn) {
-        $c = async\pg\connect($dsn, PGSQL_CONNECT_FORCE_NEW);
-        $r = async\pg\query_params($c, 'SELECT $1::int AS id, pg_sleep(0.3)', [$id]);
+        $c = fiber\pg\connect($dsn, PGSQL_CONNECT_FORCE_NEW);
+        $r = fiber\pg\query_params($c, 'SELECT $1::int AS id, pg_sleep(0.3)', [$id]);
         return pg_fetch_assoc($r);
     };
     $a = go(fn() => $query(1));

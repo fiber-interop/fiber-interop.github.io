@@ -19,9 +19,9 @@ and the four files were run unchanged on phasync, Revolt, AMPHP and ReactPHP wit
 <h3 class="ex">Three HTTP requests at once (Guzzle)</h3>
 
 ```php
-use function async\{run, go, await_all};
+use function fiber\{run, go, await_all};
 
-$client = async\guzzle\client(['base_uri' => 'https://api.example.com']);
+$client = fiber\guzzle\client(['base_uri' => 'https://api.example.com']);
 
 [$orders, $customer, $stock] = run(function () use ($client) {
     $orders = go(fn() => (string) $client->get('/orders/42')->getBody());
@@ -40,12 +40,12 @@ The three `get()` calls run in separate tasks and overlap; `await_all()` returns
 <h3 class="ex">Several database queries at once (PostgreSQL)</h3>
 
 ```php
-use function async\{run, go, await_all};
+use function fiber\{run, go, await_all};
 
 $rows = run(function () use ($dsn) {
     $query = function ($id) use ($dsn) {
-        $c = async\pg\connect($dsn, PGSQL_CONNECT_FORCE_NEW);
-        $r = async\pg\query_params($c, 'SELECT $1::int AS id, pg_sleep(0.3)', [$id]);
+        $c = fiber\pg\connect($dsn, PGSQL_CONNECT_FORCE_NEW);
+        $r = fiber\pg\query_params($c, 'SELECT $1::int AS id, pg_sleep(0.3)', [$id]);
         return pg_fetch_assoc($r);
     };
     $a = go(fn() => $query(1));
@@ -60,8 +60,8 @@ Three queries that each take 0.3 s finish in 0.3 s in total (local PostgreSQL, s
 <h3 class="ex">A timeout, and a sleep that holds nobody up</h3>
 
 ```php
-use function async\{run, go, await, sleep};
-use async\TimeoutException;
+use function fiber\{run, go, await, sleep};
+use fiber\TimeoutException;
 
 run(function () {
     $ticker = go(function () {
@@ -83,12 +83,12 @@ run(function () {
 });
 ```
 
-`await($task, 0.2)` throws `TimeoutException` when the task is not done in time (the task itself keeps running). `async\sleep()` pauses only the calling task, so the ticker keeps ticking.
+`await($task, 0.2)` throws `TimeoutException` when the task is not done in time (the task itself keeps running). `fiber\sleep()` pauses only the calling task, so the ticker keeps ticking.
 
 <h3 class="ex">For library authors: one function, every runtime</h3>
 
 ```php
-use function async\{go, await_all, sleep};
+use function fiber\{go, await_all, sleep};
 
 function fetchAll(array $ms): array
 {
@@ -103,7 +103,7 @@ function fetchAll(array $ms): array
 }
 ```
 
-The library depends on `fiber-interop/api` and imports no runtime. The application calls `async\run(fn() => fetchAll([200, 200, 200]))` and the three 200 ms sleeps take 0.2 s on whichever adapter is installed. See [Library authors](tutorial-library.html).
+The library depends on `fiber-interop/api` and imports no runtime. The application calls `fiber\run(fn() => fetchAll([200, 200, 200]))` and the three 200 ms sleeps take 0.2 s on whichever adapter is installed. See [Library authors](tutorial-library.html).
 
 <h2 id="api">The API</h2>
 
@@ -136,7 +136,7 @@ go(fn() => (new Scope)->run(handle(...), $request1));
 go(fn() => (new Scope)->run(handle(...), $request2));
 ```
 
-A request handled inside `(new Scope)->run(...)` has an identity that follows the code across fibers, so a registry like this, a container's `Lifetime::Scoped` services, the locale or the timezone become per request, with per-scope superglobals on top. Application authors without a framework get it directly, and framework authors can build on it instead of shipping a second "worker mode" runtime or a process per request. Library authors never see it: they call `async\go()` and the scope is carried along. Every runtime gets a global `\Scope`, the native extension or the polyfill. Runnable version: [examples/front/scope.php](https://github.com/fiber-interop/fiber-interop.github.io/blob/main/examples/front/scope.php), same output on phasync and Revolt. More on the [Scope page](scope.html) and in [scoped services](tutorial-container.html).
+A request handled inside `(new Scope)->run(...)` has an identity that follows the code across fibers, so a registry like this, a container's `Lifetime::Scoped` services, the locale or the timezone become per request, with per-scope superglobals on top. Application authors without a framework get it directly, and framework authors can build on it instead of shipping a second "worker mode" runtime or a process per request. Library authors never see it: they call `fiber\go()` and the scope is carried along. Every runtime gets a global `\Scope`, the native extension or the polyfill. Runnable version: [examples/front/scope.php](https://github.com/fiber-interop/fiber-interop.github.io/blob/main/examples/front/scope.php), same output on phasync and Revolt. More on the [Scope page](scope.html) and in [scoped services](tutorial-container.html).
 
 <h2 id="measured">Measured: overlapping waiting time</h2>
 
@@ -158,21 +158,21 @@ Swoole was not measured on this machine.
 
 <h2 id="overlaps">What overlaps and what blocks</h2>
 
-Inside `async\run()`, with any adapter ([details](integrations.html)):
+Inside `fiber\run()`, with any adapter ([details](integrations.html)):
 
 - **Guzzle**: requests from different tasks overlap (`fiber-interop/guzzle`).
-- **curl**: `async\curl\exec()` lets other tasks run while a transfer waits (`fiber-interop/curl`).
-- **PostgreSQL**: `async\pg\query()` waits for the server without stalling the other tasks (`fiber-interop/pg`).
-- **MySQL**: `async\mysqli\query()` waits for the server without stalling the other tasks (`fiber-interop/mysqli`).
-- **Processes**: `async\process\run()` waits for a command while the other tasks continue (`fiber-interop/process`).
+- **curl**: `fiber\curl\exec()` lets other tasks run while a transfer waits (`fiber-interop/curl`).
+- **PostgreSQL**: `fiber\pg\query()` waits for the server without stalling the other tasks (`fiber-interop/pg`).
+- **MySQL**: `fiber\mysqli\query()` waits for the server without stalling the other tasks (`fiber-interop/mysqli`).
+- **Processes**: `fiber\process\run()` waits for a command while the other tasks continue (`fiber-interop/process`).
 - **Redis**: a Predis command suspends only the task that sent it (`fiber-interop/predis`).
 - **Doctrine DBAL**: queries from different tasks overlap through the mysqli and pg drivers above (`fiber-interop/dbal`).
 
-Outside `async\run()` each of them behaves exactly like the library it wraps, so adding them to an
+Outside `fiber\run()` each of them behaves exactly like the library it wraps, so adding them to an
 existing application breaks nothing.
 
 These still block every task inside `run()`: PDO, `file_get_contents('http://...')`, native
-`sleep()`/`usleep()` (use `async\sleep()`), and DNS lookups, unless the phasync extension or Swoole's
+`sleep()`/`usleep()` (use `fiber\sleep()`), and DNS lookups, unless the phasync extension or Swoole's
 hooks make them cooperative.
 
 <h2 id="adapter">Which adapter do I install?</h2>
@@ -202,7 +202,7 @@ only. If your application already runs on an event loop, install that loop's ada
 composer require fiber-interop/api fiber-interop/phasync fiber-interop/guzzle
 ```
 
-One adapter installed is picked up automatically; with several, call `async\setup(new FiberInterop\Revolt\Adapter())` once. See [Get started](get-started.html).
+One adapter installed is picked up automatically; with several, call `fiber\setup(new FiberInterop\Revolt\Adapter())` once. See [Get started](get-started.html).
 
 <h2 id="next">Next</h2>
 
