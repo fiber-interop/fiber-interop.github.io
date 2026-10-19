@@ -1,0 +1,57 @@
+{
+    "name": "fiber-interop/site-examples-front",
+    "description": "Runnable sources of the examples on the front page.",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": "^8.1",
+        "fiber-interop/api": "*",
+        "fiber-interop/phasync": "*",
+        "fiber-interop/revolt": "*",
+        "fiber-interop/amp": "*",
+        "fiber-interop/react": "*",
+        "fiber-interop/guzzle": "*",
+        "fiber-interop/pg": "*"
+    },
+    "autoload": {
+        "files": [
+            "runtime.php"
+        ]
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../../../api"
+        },
+        {
+            "type": "path",
+            "url": "../../../scope"
+        },
+        {
+            "type": "path",
+            "url": "../../../phasync"
+        },
+        {
+            "type": "path",
+            "url": "../../../revolt"
+        },
+        {
+            "type": "path",
+            "url": "../../../amp"
+        },
+        {
+            "type": "path",
+            "url": "../../../react"
+        },
+        {
+            "type": "path",
+            "url": "../../../guzzle"
+        },
+        {
+            "type": "path",
+            "url": "../../../pg"
+        }
+    ]
+}

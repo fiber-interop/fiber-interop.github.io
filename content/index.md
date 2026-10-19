@@ -8,7 +8,94 @@ installing one adapter package.</p>
 fiber-interop is young (0.x versions) and the [Scope RFC for php-src](rfc-scope.html) is a draft, so the
 API may change before 1.0.
 
-<nav class="toc" aria-label="On this page"><a href="#measured">Measured</a><a href="#overlaps">What overlaps</a><a href="#quickstart">Quickstart</a><a href="#adapter">Which adapter</a><a href="#constraints">Constraints</a><a href="#next">Next</a></nav>
+<nav class="toc" aria-label="On this page"><a href="#examples">Examples</a><a href="#api">API</a><a href="#measured">Measured</a><a href="#overlaps">What overlaps</a><a href="#adapter">Which adapter</a><a href="#constraints">Constraints</a><a href="#bootstrap">Bootstrapping</a><a href="#next">Next</a></nav>
+
+<h2 id="examples">What it looks like</h2>
+
+Four common situations. Each snippet is a file in
+[examples/front](https://github.com/fiber-interop/fiber-interop.github.io/tree/main/examples/front),
+run on phasync and Revolt.
+
+<h3 class="ex">Three HTTP requests at once (Guzzle)</h3>
+
+```php
+use function async\{run, go, await_all};
+
+$client = async\guzzle\client(['base_uri' => 'https://api.example.com']);
+
+[$orders, $customer, $stock] = run(fn() => await_all([
+    go(fn() => json_decode((string) $client->get('/orders/42')->getBody(), true)),
+    go(fn() => json_decode((string) $client->get('/customers/7')->getBody(), true)),
+    go(fn() => json_decode((string) $client->get('/stock/A-100')->getBody(), true)),
+]));
+```
+
+The three `get()` calls run in separate tasks and overlap; `await_all()` returns the three results under the same keys. If a task throws, `await_all()` lets every task settle and then rethrows the first exception, out of `run()`.
+
+<h3 class="ex">Several database queries at once (PostgreSQL)</h3>
+
+```php
+use function async\{run, go, await_all};
+
+$rows = run(fn() => await_all(array_map(
+    fn($id) => go(function () use ($id, $dsn) {
+        $c = async\pg\connect($dsn, PGSQL_CONNECT_FORCE_NEW);
+        $r = async\pg\query_params($c, 'SELECT $1::int AS id, pg_sleep(0.3)', [$id]);
+        return $r === false ? pg_last_error($c) : pg_fetch_assoc($r);
+    }),
+    [1, 2, 3],
+)));
+```
+
+Three queries that each take 0.3 s finish in 0.3 s in total (local PostgreSQL, same on phasync and Revolt). One connection per task, because a connection runs one query at a time.
+
+<h3 class="ex">A timeout, and a sleep that holds nobody up</h3>
+
+```php
+use function async\{run, go, await, sleep};
+use async\TimeoutException;
+
+run(function () {
+    $ticker = go(function () { for ($i = 1; $i <= 3; $i++) { sleep(0.05); echo "tick $i\n"; } });
+    $slow = go(function () { sleep(5); return 'slow result'; });
+    try {
+        echo await($slow, 0.2), "\n";
+    } catch (TimeoutException) {
+        echo "gave up after 0.2 s; the ticker kept running\n";
+    }
+    await($ticker);
+});
+```
+
+`await($task, 0.2)` throws `TimeoutException` when the task is not done in time (the task itself keeps running). `async\sleep()` pauses only the calling task, so the ticker keeps ticking.
+
+<h3 class="ex">For library authors: one function, every runtime</h3>
+
+```php
+use function async\{go, await_all, sleep};
+
+function fetchAll(array $ms): array
+{
+    return await_all(array_map(fn($m) => go(function () use ($m) { sleep($m / 1000); return "slept $m ms"; }), $ms));
+}
+```
+
+The library depends on `fiber-interop/api` and imports no runtime. The application calls `async\run(fn() => fetchAll([200, 200, 200]))` and the three 200 ms sleeps take 0.2 s on whichever adapter is installed. See [Library authors](tutorial-library.html).
+
+<h2 id="api">The API</h2>
+
+Eight functions cover most code; the [API reference](api.html) has signatures and a runnable example for each.
+
+- [`run($fn)`](api-run.html): the entry point; runs `$fn` and returns its result when the tasks it awaits are done.
+- [`go($fn)`](api-go.html): start a task, return an awaitable at once.
+- [`await($x, $timeout)`](api-await.html): wait for one task, rethrow its exception; `TimeoutException` on timeout.
+- [`await_all($xs)`](api-await_all.html): wait for all; results under the same keys.
+- [`await_any($xs)`](api-await_any.html): wait for the first to finish.
+- [`sleep($s)`](api-sleep.html): pause this task only.
+- [`readable($stream)`](api-readable.html) / [`writable($stream)`](api-writable.html): wait until a stream can be read or written.
+
+This works in a controller, a command, a queue job or a service, in Laravel, Symfony, Slim,
+CodeIgniter or plain PHP; fiber-interop does not replace the framework.
 
 <h2 id="measured">Measured: overlapping waiting time</h2>
 
@@ -47,34 +134,6 @@ These still block every task inside `run()`: PDO, `file_get_contents('http://...
 `sleep()`/`usleep()` (use `async\sleep()`), and DNS lookups, unless the phasync extension or Swoole's
 hooks make them cooperative.
 
-<h2 id="quickstart">Quickstart</h2>
-
-```
-composer require fiber-interop/api fiber-interop/phasync fiber-interop/guzzle
-```
-
-```php
-use function async\{run, go, await_all};
-
-$client = async\guzzle\client(['base_uri' => 'https://api.example.com']);
-
-[$orders, $customer, $stock] = run(fn() => await_all([
-    go(fn() => json_decode((string) $client->get('/orders/42')->getBody(), true)),
-    go(fn() => json_decode((string) $client->get('/customers/7')->getBody(), true)),
-    go(fn() => json_decode((string) $client->get('/stock/A-100')->getBody(), true)),
-]));
-```
-
-What happens:
-
-- `go()` starts a task and returns at once; the three `get()` calls run in separate tasks and overlap.
-- `await_all()` waits for all three and returns their results under the same keys.
-- `run()` returns when the awaited tasks are done.
-- If a task throws, `await_all()` lets every task settle and then rethrows the first exception, out of `run()`.
-
-This works in a controller, a command, a queue job or a service, in Laravel, Symfony, Slim,
-CodeIgniter or plain PHP; fiber-interop does not replace the framework.
-
 <h2 id="adapter">Which adapter do I install?</h2>
 
 The application installs `fiber-interop/api` and exactly one adapter; libraries depend on the api
@@ -88,9 +147,6 @@ only. If your application already runs on an event loop, install that loop's ada
 <div class="card"><h3>Quick start</h3><p>No event loop yet? phasync is a complete runtime with nothing else to configure, and its optional bundled extension also makes PHP's own blocking calls (<code>sleep()</code>, <code>curl_exec()</code>) cooperative. phasync 2 is in beta.</p><code>fiber-interop/phasync</code></div>
 </div>
 
-With exactly one adapter installed, it is picked up automatically. With several, call
-`async\setup(...)` in your bootstrap to choose one.
-
 <h2 id="constraints">Constraints</h2>
 
 - CPU-bound work does not get faster. Tasks take turns in one PHP process; only waiting overlaps.
@@ -98,6 +154,15 @@ With exactly one adapter installed, it is picked up automatically. With several,
   connection each: size connection pools for the number of tasks that query at once.
 - Exceptions propagate: `await()` rethrows a task's exception, `await_all()` rethrows the first one
   after every task has settled.
+
+<h2 id="bootstrap">Bootstrapping: one line per runtime</h2>
+
+```
+composer require fiber-interop/api fiber-interop/phasync fiber-interop/guzzle
+```
+
+With exactly one adapter installed, it is picked up automatically and nothing else is needed. With several, call
+`async\setup(new FiberInterop\Revolt\Adapter())` (or the `Adapter` class of `phasync`, `amp`, `react`, `swoole`) once in your bootstrap. [Get started](get-started.html) has the details.
 
 <h2 id="next">Next</h2>
 

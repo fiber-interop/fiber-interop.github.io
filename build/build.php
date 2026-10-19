@@ -54,6 +54,40 @@ $h = fn(string $s) => htmlspecialchars($s, ENT_QUOTES);
 const FI_API_FUNCS = ['setup','register','adapter','go','await','await_all','await_any','run','service','sleep','readable','writable'];
 const FI_RUNTIMES = ['revolt'=>['Revolt'],'amp'=>['AMPHP'],'react'=>['ReactPHP'],'swoole'=>['Swoole'],'openswoole'=>['OpenSwoole'],'phasync'=>['phasync']];
 
+/** Highlight the ```php blocks of a page at build time with PHP's own tokenizer (no client-side JS). */
+function highlight_php_blocks(string $html): string
+{
+    return preg_replace_callback('~<pre><code class="language-php">(.*?)</code></pre>~s', function ($m) {
+        $src = htmlspecialchars_decode($m[1], ENT_QUOTES);
+        $open = !str_contains($src, '<?php');
+        $toks = token_get_all(($open ? '<?php ' : '') . $src);
+        $kw = [T_FUNCTION, T_FN, T_RETURN, T_USE, T_NEW, T_CLASS, T_TRY, T_CATCH, T_FOREACH, T_FOR, T_IF, T_ELSE, T_STATIC, T_NAMESPACE, T_THROW, T_AS, T_ECHO, T_PUBLIC, T_PRIVATE, T_PROTECTED, T_CONST, T_EXTENDS, T_IMPLEMENTS, T_INTERFACE, T_FINALLY, T_MATCH, T_WHILE, T_ABSTRACT, T_FINAL, T_INSTANCEOF, T_CLONE, T_YIELD, T_CONTINUE, T_BREAK, T_FOREACH];
+        $out = '';
+        $prev = null;
+        foreach ($toks as $i => $t) {
+            if (!is_array($t)) { $out .= '<span class="tk-op">' . htmlspecialchars($t) . '</span>'; continue; }
+            [$id, $txt] = $t;
+            $e = htmlspecialchars($txt, ENT_QUOTES);
+            if ($id === T_OPEN_TAG) { if (!$open) $out .= $e; continue; }
+            $cls = match (true) {
+                $id === T_VARIABLE => 'var',
+                in_array($id, [T_COMMENT, T_DOC_COMMENT], true) => 'cmt',
+                in_array($id, [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true) => 'str',
+                in_array($id, [T_LNUMBER, T_DNUMBER], true) => 'num',
+                in_array($id, $kw, true) => 'kw',
+                $id === T_STRING => (function () use ($toks, $i) {
+                    for ($j = $i + 1; isset($toks[$j]) && is_array($toks[$j]) && $toks[$j][0] === T_WHITESPACE; $j++);
+                    return ($toks[$j] ?? null) === '(' ? 'fn' : null;
+                })(),
+                in_array($id, [T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true) => (($toks[$i + 1] ?? null) === '(' ? 'fn' : null),
+                default => null,
+            };
+            $out .= $cls ? "<span class=\"tk-$cls\">$e</span>" : $e;
+        }
+        return '<pre><code class="language-php">' . $out . '</code></pre>';
+    }, $html);
+}
+
 function page(string $file, string $title, string $body, string $desc, bool $wide = false): void
 {
     global $root;
@@ -102,6 +136,7 @@ $body
 </body>
 </html>
 HTML;
+    $html = highlight_php_blocks($html);
     $html = str_replace(['%WIDE%', '%DATE%'], [$wide ? ' wide' : '', gmdate('Y-m-d H:i') . ' UTC'], $html);
     file_put_contents("$root/public/$file", $html);
     echo "built $file\n";

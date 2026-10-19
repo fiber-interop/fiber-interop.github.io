@@ -72,3 +72,9 @@ h1.wordmark{font-size:2rem;margin-bottom:0}
 .apilist td:first-child{white-space:nowrap}
 .status td:nth-child(n+2),.status th:nth-child(n+2){font-size:.9rem}
 @media (max-width:600px){.apilist td:first-child{white-space:normal}.apilist,.status{display:block;overflow-x:auto}}
+
+/* build-time syntax highlighting (build/build.php highlight_php_blocks) */
+:root{--tk-kw:#a626a4;--tk-str:#0a6b2c;--tk-cmt:#5f6b76;--tk-var:#b3401a;--tk-fn:#0b5cad;--tk-num:#8a5a00;--tk-op:#57606a}
+@media (prefers-color-scheme:dark){:root{--tk-kw:#d9a6ff;--tk-str:#8bd99f;--tk-cmt:#8f9aa5;--tk-var:#ffab82;--tk-fn:#79c0ff;--tk-num:#e8c36a;--tk-op:#a9b4bf}}
+.tk-kw{color:var(--tk-kw);font-weight:600}.tk-str{color:var(--tk-str)}.tk-cmt{color:var(--tk-cmt);font-style:italic}.tk-var{color:var(--tk-var)}.tk-fn{color:var(--tk-fn)}.tk-num{color:var(--tk-num)}.tk-op{color:var(--tk-op)}
+.ex{margin:1.6rem 0 .3rem}.ex+p{margin-top:.4rem}
