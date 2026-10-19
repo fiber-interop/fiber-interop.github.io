@@ -95,6 +95,14 @@ jobs:
           php -r '$a = json_decode(file_get_contents("conformance.json"), true); $b = json_decode(file_get_contents("conformance-openswoole.json"), true); $a["runtimes"] += $b["runtimes"]; file_put_contents("conformance.json", json_encode($a, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");'
           cat conformance-openswoole.json
 
+      # Never publish a broken run: every runtime needs at least one passing example and (adapters) an ok api probe.
+      - name: Check conformance results
+        run: |
+          php -r '$bad = []; foreach (json_decode(file_get_contents("conformance.json"), true)["runtimes"] as $n => $r) {
+            if (!in_array("ok", $r["results"], true)) $bad[] = "$n: 0 examples pass (" . reset($r["results"]) . ")";
+            if ($n !== "reference" && ($r["probes"]["api"] ?? null) !== "ok") $bad[] = "$n: api probe " . json_encode($r["probes"]["api"] ?? null);
+          } if ($bad) { fwrite(STDERR, implode("\n", $bad) . "\n"); exit(1); }'
+
       - name: Build site
         run: php build/build.php remote
 
