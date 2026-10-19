@@ -14,6 +14,7 @@ The functions live in the `fiber\` namespace (before 0.3 they were in `async\`, 
 | runs on Revolt without AMPHP | `composer require fiber-interop/api fiber-interop/revolt` |
 | runs on ReactPHP | `composer require fiber-interop/api fiber-interop/react` |
 | runs on Swoole or OpenSwoole | `composer require fiber-interop/api fiber-interop/swoole` |
+| runs on TrueAsync (PHP 8.6) | `composer require fiber-interop/api fiber-interop/trueasync` |
 
 `fiber-interop/api` is what libraries depend on. The adapter is the application's choice, one per
 application: with exactly one adapter installed it is picked up automatically. With several,

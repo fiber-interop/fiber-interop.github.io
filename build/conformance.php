@@ -1,8 +1,9 @@
 <?php
 // Runs the api's conformance runner against every adapter and writes conformance.json.
-// Usage: php build/conformance.php [SRC_DIR=..] [OUT=conformance.json] [only=openswoole]
+// Usage: php build/conformance.php [SRC_DIR=..] [OUT=conformance.json] [only=openswoole|trueasync]
 // With only=openswoole just the swoole adapter runs, recorded as runtime "openswoole" (CI loads ext-openswoole
 // instead of ext-swoole for that run); the other runtimes are skipped. Without it, openswoole is not run.
+// With only=trueasync just the trueasync adapter runs (CI runs it inside the trueasync/php-true-async image).
 // Each adapter is a sibling checkout (api, phasync, revolt, ...) with composer already installed.
 // A crashing adapter (no "ok"/"FAIL" lines) gets every example marked fail plus its error text.
 
@@ -25,12 +26,16 @@ foreach ($examples as $e) {
 
 $git = fn(string $dir) => trim((string) shell_exec('git -C ' . escapeshellarg($dir) . ' rev-parse --short HEAD 2>/dev/null')) ?: null;
 $runtimes = ['reference' => ['dir' => $api, 'bootstrap' => "$api/tests/bootstrap-reference.php"]];
-foreach (['phasync', 'revolt', 'amp', 'react', 'swoole'] as $n) {
+foreach (['phasync', 'revolt', 'amp', 'react', 'swoole', 'trueasync'] as $n) {
     $runtimes[$n] = ['dir' => "$src/$n", 'bootstrap' => "$src/$n/tests/bootstrap.php"];
 }
 
 if ($only === 'openswoole') {
     $runtimes = ['openswoole' => $runtimes['swoole']];
+} elseif ($only === 'trueasync') {
+    $runtimes = ['trueasync' => $runtimes['trueasync']];
+} else {
+    unset($runtimes['trueasync']); // needs PHP 8.6 with TrueAsync: its own CI step
 }
 
 // scope probes: probes/scope-{api,loop,raw-fiber}.php in the adapter checkout, each prints "ok" and exits 0.
@@ -127,6 +132,10 @@ foreach ($runtimes as $name => $rt) {
             $ext = $name;
             $v = trim((string) shell_exec("{$env}" . escapeshellarg(PHP_BINARY) . " -r 'echo phpversion(\"$ext\");' 2>/dev/null"));
             $ver["ext-$ext"] = $v !== '' ? $v : 'not loaded';
+        }
+        if ($name === 'trueasync') {
+            $v = phpversion('true_async');
+            $ver['ext-true_async'] = $v !== false ? $v : 'not loaded';
         }
         $ver['php'] = PHP_VERSION;
         $ver['api'] = $entry['api_commit'];

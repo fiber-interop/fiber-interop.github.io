@@ -2,7 +2,7 @@
 
 <p class="lead">Run ordinary blocking-style PHP code concurrently on PHP Fibers. The code stays plain
 PHP: no promises, no callbacks (a call returns its value, instead of taking a function to call later),
-no <code>yield</code>. It runs on phasync, Revolt, AMPHP, ReactPHP or Swoole; you pick the event loop by
+no <code>yield</code>. It runs on phasync, Revolt, AMPHP, ReactPHP, Swoole or TrueAsync; you pick the event loop by
 installing one adapter package.</p>
 
 fiber-interop is young (0.x versions) and the [Scope RFC for php-src](rfc-scope.html) is a draft, so the
@@ -185,6 +185,7 @@ only. If your application already runs on an event loop, install that loop's ada
 <div class="card"><h3>AMPHP</h3><p>Running on AMPHP? Tasks and AMPHP futures await each other.</p><code>fiber-interop/amp</code></div>
 <div class="card"><h3>ReactPHP</h3><p>Running on ReactPHP? Tasks and React promises await each other on React's loop.</p><code>fiber-interop/react</code></div>
 <div class="card"><h3>Swoole</h3><p>Running on Swoole or OpenSwoole? Uses Swoole's coroutines and runtime hooks.</p><code>fiber-interop/swoole</code></div>
+<div class="card"><h3>TrueAsync</h3><p>Running on TrueAsync? Tasks are TrueAsync coroutines.</p><code>fiber-interop/trueasync</code></div>
 <div class="card"><h3>Quick start</h3><p>No event loop yet? phasync is a complete runtime with nothing else to configure, and its optional extension (MIT, bundled with phasync or <code>pie install phasync/ext-phasync</code>) also makes PHP's own blocking calls (<code>sleep()</code>, <code>curl_exec()</code>) cooperative.</p><code>fiber-interop/phasync</code></div>
 </div>
 
@@ -210,5 +211,5 @@ One adapter installed is picked up automatically; with several, call `fiber\setu
 - [Library authors](tutorial-library.html): depend on `fiber-interop/api` instead of one event loop. Guzzle is the worked example.
 - [Containers](tutorial-container.html): scoped services per request when requests run concurrently.
 - [API reference](api.html): every function of `fiber-interop/api` with signature, behaviour and a runnable example.
-- [Runtimes](runtimes.html): Revolt, AMPHP, ReactPHP, Swoole, OpenSwoole and phasync, with conformance status and known gaps.
+- [Runtimes](runtimes.html): Revolt, AMPHP, ReactPHP, Swoole, OpenSwoole, TrueAsync and phasync, with conformance status and known gaps.
 - [Integrations](integrations.html): every package above in detail.

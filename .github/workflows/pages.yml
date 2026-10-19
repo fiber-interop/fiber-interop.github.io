@@ -41,6 +41,8 @@ jobs:
         with: { repository: fiber-interop/react, path: work/react, fetch-depth: 0 }
       - uses: actions/checkout@v4
         with: { repository: fiber-interop/swoole, path: work/swoole, fetch-depth: 0 }
+      - uses: actions/checkout@v4
+        with: { repository: fiber-interop/trueasync, path: work/trueasync, fetch-depth: 0 }
 
       - uses: actions/checkout@v4
         with: { repository: fiber-interop/ext-scope, path: work/ext-scope }
@@ -57,13 +59,13 @@ jobs:
           # The packages depend on each other as ^0.1 from Packagist. Here we want the checked-out
           # main of every sibling instead: point each checkout at its siblings with path repositories
           # (api and scope alias dev-main as 0.1.x-dev, which satisfies ^0.1 at dev stability).
-          for d in api scope phasync revolt amp react swoole; do
+          for d in api scope phasync revolt amp react swoole trueasync; do
             echo "::group::composer update $d"
             (cd work/$d \
               && composer config minimum-stability dev \
               && composer config prefer-stable true \
               && for s in api scope; do [ "$s" = "$d" ] || composer config repositories.$s path ../$s; done \
-              && composer update --no-interaction --no-progress) || echo "composer install failed for $d"
+              && composer update --no-interaction --no-progress --ignore-platform-req=php) || echo "composer install failed for $d"
             echo "::endgroup::"
           done
 
@@ -94,6 +96,16 @@ jobs:
           php build/conformance.php "$PWD/work" "$PWD/conformance-openswoole.json" openswoole
           php -r '$a = json_decode(file_get_contents("conformance.json"), true); $b = json_decode(file_get_contents("conformance-openswoole.json"), true); $a["runtimes"] += $b["runtimes"]; file_put_contents("conformance.json", json_encode($a, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");'
           cat conformance-openswoole.json
+
+      # TrueAsync needs PHP 8.6 with ext true_async: run the same conformance inside its Docker image.
+      # Composer already ran on the host above (--ignore-platform-req=php, since the host has PHP 8.4).
+      - name: Run conformance for the trueasync adapter on TrueAsync
+        run: |
+          docker run --rm -v "$PWD":/w -w /w -e XDEBUG_MODE=off \
+            -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
+            trueasync/php-true-async:latest php build/conformance.php /w/work /w/conformance-trueasync.json trueasync
+          php -r '$a = json_decode(file_get_contents("conformance.json"), true); $b = json_decode(file_get_contents("conformance-trueasync.json"), true); $a["runtimes"] += $b["runtimes"]; file_put_contents("conformance.json", json_encode($a, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");'
+          cat conformance-trueasync.json
 
       # Never publish a broken run: every runtime needs at least one passing example and (adapters) an ok api probe.
       - name: Check conformance results

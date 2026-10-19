@@ -53,7 +53,7 @@ copy("$root/assets/favicon.svg", "$root/public/favicon.svg");
 $h = fn(string $s) => htmlspecialchars($s, ENT_QUOTES);
 
 const FI_API_FUNCS = ['setup','register','adapter','go','await','await_all','await_any','run','service','sleep','readable','writable'];
-const FI_RUNTIMES = ['revolt'=>['Revolt'],'amp'=>['AMPHP'],'react'=>['ReactPHP'],'swoole'=>['Swoole'],'openswoole'=>['OpenSwoole'],'phasync'=>['phasync']];
+const FI_RUNTIMES = ['revolt'=>['Revolt'],'amp'=>['AMPHP'],'react'=>['ReactPHP'],'swoole'=>['Swoole'],'trueasync'=>['TrueAsync'],'openswoole'=>['OpenSwoole'],'phasync'=>['phasync']];
 
 /** Highlight the ```php blocks of a page at build time with PHP's own tokenizer (no client-side JS). */
 function highlight_php_blocks(string $html): string
@@ -155,6 +155,7 @@ $adapters = [
     'amp' => ['AMPHP', 'amp'],
     'react' => ['ReactPHP', 'react'],
     'swoole' => ['Swoole', 'swoole'],
+    'trueasync' => ['TrueAsync', 'trueasync'],
 ];
 $conf = is_file("$root/conformance.json") ? json_decode(file_get_contents("$root/conformance.json"), true) : null;
 
@@ -171,9 +172,9 @@ foreach ($adapters as $key => [$label]) {
     }
     $body .= "<li><a href=\"adapters.html#$key\">$label</a> (<code>fiber-interop/$key</code>)$st</li>\n";
 }
-$body .= "<li>TrueAsync, when it ships</li>\n</ul>\n";
+$body .= "</ul>\n";
 $body .= '<p><a href="spec.html">Specification</a> · <a href="conformance.html">Conformance matrix</a> · <a href="scope.html">Scope</a> · <a href="https://github.com/fiber-interop">GitHub organization</a></p>';
-page('index.html', 'Home', $body, 'Concurrent Guzzle, curl, PostgreSQL and MySQL in plain PHP, on phasync, Revolt, AMPHP, ReactPHP or Swoole.');
+page('index.html', 'Home', $body, 'Concurrent Guzzle, curl, PostgreSQL and MySQL in plain PHP, on phasync, Revolt, AMPHP, ReactPHP, Swoole or TrueAsync.');
 
 // ---- get started and tutorials (handwritten; a missing file is skipped so the build never breaks)
 foreach (['get-started' => ['Get started', 'Install an adapter and run your first concurrent PHP program.'],
@@ -208,7 +209,7 @@ foreach ($adapters as $key => [$label]) {
     $secs .= "<section id=\"$key\"><h2>$label <small><code>fiber-interop/$key</code></small></h2><p><a href=\"https://github.com/fiber-interop/$key\">Repository</a></p>"
         . render($conv, source($arg, $key, 'README.md'), $key, 2, true) . "</section>\n";
 }
-page('adapters.html', 'Adapters', "<h1>Adapters</h1><p class=\"lead\">One package per runtime, each certified by the same conformance suite. Sections below are generated from each adapter's README.</p>$toc</ul>$secs", 'fiber-interop adapters for phasync, Revolt, AMPHP, ReactPHP and Swoole.');
+page('adapters.html', 'Adapters', "<h1>Adapters</h1><p class=\"lead\">One package per runtime, each certified by the same conformance suite. Sections below are generated from each adapter's README.</p>$toc</ul>$secs", 'fiber-interop adapters for phasync, Revolt, AMPHP, ReactPHP, Swoole and TrueAsync.');
 
 // ---- scope
 $body = '<h1>Scope</h1><p class="lead">The identity of the operation code belongs to, an HTTP request or a job, preserved across fibers and generators.</p>'
@@ -223,7 +224,7 @@ page('scope.html', 'Scope', $body, 'Scope: operation identity across fibers and 
 if (!$conf) {
     page('conformance.html', 'Conformance', '<h1>Conformance</h1><p>No conformance.json was produced for this build.</p>', 'Conformance matrix.');
 } else {
-    $names = ['amp' => 'AMPHP', 'openswoole' => 'OpenSwoole (swoole adapter)', 'phasync' => 'phasync', 'react' => 'ReactPHP', 'revolt' => 'Revolt', 'swoole' => 'Swoole', 'reference' => 'reference adapter (api test double)'];
+    $names = ['amp' => 'AMPHP', 'openswoole' => 'OpenSwoole (swoole adapter)', 'phasync' => 'phasync', 'react' => 'ReactPHP', 'revolt' => 'Revolt', 'swoole' => 'Swoole', 'trueasync' => 'TrueAsync', 'reference' => 'reference adapter (api test double)'];
     $nm = fn(string $r) => $names[$r] ?? $r;
     $rts = array_keys($conf['runtimes']);
     usort($rts, fn($a, $b) => ($a === 'reference') <=> ($b === 'reference') ?: strcasecmp($nm($a), $nm($b)));
