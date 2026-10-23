@@ -404,15 +404,15 @@ smallest possible surface. With all seven, vote A isolates the whole of a reques
 `date_default_timezone_set()` are ambient settings of the current operation: code sets them to
 interpret and format values for the request it is serving, and a server that hosts several
 requests at once has today one value of each for all of them. With a yes on this vote they follow
-the scope: the root scope's values are today's (from ini and the SAPI), a new scope inherits its
-creator's values (unlike the superglobals, these are plain strings, so inheriting them shares
-nothing), a change inside a scope affects only
-that scope, and code outside any scope sees no change. Inheritance is what makes the rule useful
-for the common case, a sub-operation that formats dates for the request it belongs to, while a
-scope that needs its own setting changes it locally. The implementation is the same swap on
+the scope with the rule of vote A: the root scope's values are today's (from ini and the SAPI), a
+new scope starts with PHP's defaults (the ini values) rather than its creator's, a change inside a
+scope affects only that scope, and code outside any scope sees no change. A new scope behaves as a
+freshly started PHP environment: whoever creates it configures what it needs, as a request's
+bootstrap does today. One rule for every piece of state, with no exception for values that happen
+to be cheap to copy, is easier to reason about than inheriting some and not others. The implementation is the same swap on
 switch: two words per switch.
 
-**Reference implementation.** The accompanying extension implements this vote too: the default timezone is one pointer swap of ext/date's current string per scope change; the locale, whose globals ext/intl does not expose to other extensions, is applied through the `intl.default_locale` ini entry only when the entering scope's locale differs from the live one (in core it would be the same plain swap as the timezone). `scope.locale_timezone=0` turns it off. Two details the text above leaves open, decided in the implementation and tested: `ini_set('date.timezone')` stays request-wide (a scope that has set its own timezone ignores it; one that never did follows it), and a scope created while the timezone is unset inherits "unset", that is the ini fallback, rather than a frozen value.
+**Reference implementation.** The accompanying extension implements this vote too: the default timezone is one pointer swap of ext/date's current string per scope change; the locale, whose globals ext/intl does not expose to other extensions, is applied through the `intl.default_locale` ini entry only when the entering scope's locale differs from the live one (in core it would be the same plain swap as the timezone). `scope.locale_timezone=0` turns it off. Two details the text above leaves open, decided in the implementation and tested: `ini_set('date.timezone')` stays request-wide (a scope that has set its own timezone ignores it; one that never did follows it), and a new scope starts with the ini value of `date.timezone` (or "unset", that is the ini fallback) and `intl.default_locale`, not with its creator's. (Version 0.9 of this text changed this from inheriting the creator's values; the extension and the polyfill are being updated to match.)
 
 The two are chosen because they are request-scoped by nature and because they are what unmodified
 applications (content management systems, frameworks) set per request today; without them such an
@@ -582,7 +582,7 @@ code outside scopes sees the state it sees today, so a subsystem can be converte
 without breaking that code.
 
 Each conversion also has to decide how a new scope's state starts: fresh, as in a new request, or
-as a copy of the state current when the scope was created. Output buffers are left to their own RFC. The two secondary votes settle it for their state: under vote A a new scope starts empty, as a new request does; under vote B it inherits its creator's locale and timezone. In both, changes inside a scope stay inside it.
+as a copy of the state current when the scope was created. Output buffers are left to their own RFC. The two secondary votes settle it the same way for their state: a new scope starts as a new request does, with empty superglobals, no session, and the default locale and timezone from ini, and changes inside a scope stay inside it.
 
 ## Future Scope
 
