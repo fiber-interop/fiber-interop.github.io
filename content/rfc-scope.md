@@ -90,6 +90,13 @@ final class Scope
      */
     public function run(callable $callback, mixed ...$args): mixed {}
 
+    /**
+     * Returns a closure that, whenever and wherever it is called, runs $closure with this scope
+     * as the current scope, as run() does. The returned closure keeps $closure's signature
+     * (by-reference parameters, defaults, return type), $this and class scope.
+     */
+    public function bind(Closure $closure): Closure {}
+
     /** The current scope. In {main} outside any run(), and in fibers and generators created there, the root scope. */
     public static function getCurrent(): Scope {}
 
@@ -114,7 +121,8 @@ final class Generator
 }
 ```
 
-A `Scope` identifies one operation. It carries no data and no behaviour beyond `run()`. The rules:
+A `Scope` identifies one operation. It carries no data and no behaviour beyond `run()` and
+`bind()`. The rules:
 
 1. `$scope->run($callback)` makes `$scope` the current scope while `$callback` runs, and restores
    the previous one afterwards, also when `$callback` throws. Calls nest: an inner `run()`
@@ -130,7 +138,8 @@ A `Scope` identifies one operation. It carries no data and no behaviour beyond `
    fiber, each generator, and `{main}`, has its own current scope, saved and restored when execution switches between them. The current scope is therefore that of the
    innermost executing context, fiber or generator, together with any `run()` active inside that
    context; a `run()` active in a caller never overrides the membership of a generator or fiber it resumes.
-5. Functions and closures run in the scope of their caller.
+5. Functions and closures run in the scope of their caller. A closure returned by
+   `$scope->bind($closure)` runs in `$scope`, whoever calls it.
 6. In `{main}`, outside any `run()`, and in fibers and generators
    created there, the current scope is the root scope, `Scope::getRootScope()`. The root scope is a
    single object that lives for the whole process (or request, under a SAPI that serves several).
@@ -146,6 +155,26 @@ the server's own loop. Code asks whether it runs inside an operation with
 `WeakMap` always has a key, and "run this outside any operation" is an ordinary call,
 `Scope::getRootScope()->run($f)`. State keyed by the root lives for the process, which is what
 process-wide state does today.
+
+Rule 5 is deliberate. Closures are mostly created once and called per operation: route handlers,
+middleware, event listeners and container factories are created while an application boots, in
+the root scope, and called during each request. If a closure captured the scope it was created in,
+as a fiber or a generator does, every one of them would run in the root scope instead of the
+request's. The opposite case, code in one scope handing a callback to code in another and meaning
+it to run as its own, is rare and deliberate, so it is explicit:
+
+```php
+$listener = Scope::getCurrent()->bind(function (Event $e) {
+    // runs in the scope that registered it, whichever scope dispatches the event
+});
+$bus->on('order.paid', $listener);
+```
+
+`bind()` adds nothing `run()` cannot express (`fn(...$a) => $scope->run($closure, ...$a)`), except
+that a userland wrapper loses by-reference parameters and the closure's signature; the native
+method keeps them. Generators and fibers created inside a bound closure belong to the bound scope,
+as they would inside `run()`. JavaScript's proposed `AsyncContext.Snapshot.wrap()` and Node's
+`AsyncLocalStorage.bind()` serve the same purpose.
 
 Together these keep one invariant: the scope never changes within an executing function, except
 through `run()` calls that function makes itself. A `yield` or a `Fiber::suspend()` may hand
