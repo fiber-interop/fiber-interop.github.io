@@ -93,7 +93,8 @@ final class Scope
     /**
      * Returns a closure that, whenever and wherever it is called, runs $closure with this scope
      * as the current scope, as run() does. The returned closure keeps $closure's signature
-     * (by-reference parameters, defaults, return type), $this and class scope.
+     * (by-reference parameters, defaults, return type), $this and class scope. $closure itself is
+     * not modified, as with Closure::bind().
      */
     public function bind(Closure $closure): Closure {}
 
