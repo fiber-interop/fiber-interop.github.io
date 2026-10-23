@@ -1,7 +1,7 @@
 # PHP RFC: Scope
 
-- Version: 0.7
-- Date: 2026-10-19
+- Version: 0.8
+- Date: 2026-10-23
 - Author: Frode Børli
 - Status: Draft
 - First Published at: (not yet published; intended location https://wiki.php.net/rfc/scope)
@@ -307,26 +307,32 @@ identities owned by reference rather than tasks with an enforced lifetime.
 This RFC proposes the identity and converts no engine state, except two cases, each small enough
 to show the shape of the rest and useful enough on its own to decide separately. This is the first.
 
-Of PHP's superglobals, five describe nothing but the current request: `$_GET`, `$_POST`,
-`$_COOKIE`, `$_FILES` and `$_REQUEST`. `$_SERVER` mixes request facts with the environment
-(`PATH`, `DOCUMENT_ROOT`), `$_ENV` describes the process and `$_SESSION` belongs to ext/session;
-they are not proposed here and are discussed below. Today a process that serves several requests
-at once has one copy of each of the five, so every long-running PHP server either rewrites them
-behind the application's back or tells its users not to touch them.
+Of PHP's superglobals, six describe the current request: `$_GET`, `$_POST`, `$_COOKIE`, `$_FILES`,
+`$_REQUEST` and `$_SERVER`. `$_ENV` describes the process and `$_SESSION` belongs to ext/session;
+they are not proposed here. Today a process that serves several requests at once has one copy of
+each of the six, so every long-running PHP server either rewrites them behind the application's
+back or tells its users not to touch them.
 
-With a yes on this vote, the five arrays follow the scope:
+With a yes on this vote, the six arrays follow the scope:
 
 - The root scope's arrays are the ones the SAPI populates: unchanged behaviour for every script
   that never creates a scope.
-- A new scope starts with its own copies of the five arrays as they are in the scope that
+- A new scope starts with its own copies of the six arrays as they are in the scope that
   creates it. Arrays are copy-on-write, so this costs nothing until one of them is written.
-- An assignment to one of the five inside a scope changes only that scope's array. Reads see the
+- An assignment to one of the six inside a scope changes only that scope's array. Reads see the
   current scope's array. All fibers and generators of the scope share it, as the rules above
   give.
 - `$_REQUEST` is a scope-local snapshot like the others, not a live merge: a scope that assigns
   `$_GET` and relies on `$_REQUEST` assigns it too, as code that assigns `$_GET` must today.
   Leaving `$_REQUEST` shared while the three it is built from are per scope would give one
   request two inconsistent views of its input, which is why it is in the set.
+- `$_SERVER` mixes request facts (`REQUEST_URI`, `REQUEST_METHOD`, the `HTTP_*` entries,
+  `REMOTE_ADDR`, `HTTPS`) with the environment (`PATH`, `DOCUMENT_ROOT`, what the application put
+  there while booting). Both follow from the rule above: a request's scope starts with a copy of its
+  creator's `$_SERVER`, environment included, and the server writes the request's entries into it.
+  Leaving it shared would leave a request's own URI, method, headers and client address to whichever
+  request wrote them last: read after the request's first suspension, they would be another
+  request's, silently.
 
 No method is added to `Scope`, and nothing decides who fills the arrays. A server does what it
 does today, inside the scope:
@@ -338,6 +344,7 @@ $scope->run(function () use ($request, $handler) {
     $_POST   = $request->parsedBody;
     $_COOKIE = $request->cookies;
     $_FILES  = $request->uploads;
+    $_SERVER = $request->serverParams + $_SERVER; // the request's entries over the environment
     $handler->handle();        // every fiber of this request sees these; no other request does
 });
 ```
@@ -357,26 +364,24 @@ follow the scope. A reference bound before a scope switch (`$g = &$_GET`) keeps 
 array it was bound to, as references do: the scope isolates the binding of the name, not objects
 already reached through it.
 
-**Implementation.** The intended mechanism is a swap of the five `zval`s: the engine keeps the five `zval`s of
+**Implementation.** The intended mechanism is a swap of the six `zval`s: the engine keeps the six `zval`s of
 the current scope in the global symbol table where they are now, and on a scope switch stores them
 into the outgoing scope and loads the incoming scope's, with no copying of arrays. That would make
 reads and writes cost what they cost today, on both NTS and ZTS builds, and a scope that never wrote
-any of the five would own no copies. Whether the swap is sufficient against the auto-global
+any of the six would own no copies. Whether the swap is sufficient against the auto-global
 machinery (`PG(http_globals)`, JIT auto-globals, `unset($_GET)`, `global $_GET`, lazily initialised
 auto-globals) is what the php-src patch must demonstrate, and the RFC's claim is only as strong as
 that patch. Under ZTS each thread has its own symbol table, so the per-thread arrays nest inside it
 as the root of that thread.
 
-**Why these five and why now.** They are the state the introduction's long-running-server
+**Why these six and why now.** They are the state the introduction's long-running-server
 argument is about; converting them demonstrates the backward-compatibility rule (code outside a
 scope sees the SAPI's arrays) on real state rather than asserting it; and the mechanism, swap on
 switch, is the one the follow-up RFC generalises, so a yes here settles its shape with the
-smallest possible surface. `$_SERVER` is left to that RFC, where the environment-versus-request
-split inside it can be discussed on its own. Until then vote A isolates request input only: `REQUEST_URI`,
-`REQUEST_METHOD` and the `HTTP_*` entries of `$_SERVER` stay shared, so vote A alone does not give
-complete isolation of HTTP requests.
+smallest possible surface. With all six, vote A isolates the whole of a request's input, its
+`$_SERVER` entries included.
 
-**Reference implementation.** The accompanying extension implements this vote: the five arrays are swapped in the symbol table (and `PG(http_globals)`) at every scope change, a new scope takes copy-on-write references to its creator's arrays, and the lazily created auto-globals are forced at the first scope creation so a later-compiled `$_GET` read cannot re-arm the engine's JIT callback over a scope's array. It is on by default and can be turned off with `scope.superglobals=0` so this vote can be evaluated independently. The userland polyfill does the same when an event loop reports a change of scope; the interoperability project where this is measured across event loops (https://fiber-interop.github.io/conformance.html, column "Scope state") shows which loops can report every switch and which cannot, which is the case for doing it in the
+**Reference implementation.** The accompanying extension implements this vote: the six arrays are swapped in the symbol table (and `PG(http_globals)`) at every scope change, a new scope takes copy-on-write references to its creator's arrays, and the lazily created auto-globals are forced at the first scope creation so a later-compiled `$_GET` read cannot re-arm the engine's JIT callback over a scope's array. It is on by default and can be turned off with `scope.superglobals=0` so this vote can be evaluated independently. The userland polyfill does the same when an event loop reports a change of scope; the interoperability project where this is measured across event loops (https://fiber-interop.github.io/conformance.html, column "Scope state") shows which loops can report every switch and which cannot, which is the case for doing it in the
 
 ### Secondary vote B: the default locale and timezone follow the scope
 
@@ -407,9 +412,8 @@ logical operation, not state merely because it is global.**
 
 | State | Belongs to | Follows the scope |
 |---|---|---|
-| `$_GET`, `$_POST`, `$_COOKIE`, `$_FILES`, `$_REQUEST` | the request | yes (vote A) |
+| `$_GET`, `$_POST`, `$_COOKIE`, `$_FILES`, `$_REQUEST`, `$_SERVER` | the request | yes (vote A) |
 | default locale, default timezone | the operation | yes (vote B) |
-| `$_SERVER` | request and environment, mixed | later, on its own |
 | output buffers, error and exception handlers, `ini_set()` values | the operation | later, one RFC each |
 | `json_last_error()`, `preg_last_error()`, `error_get_last()` | the call just made | no: see below |
 | class statics, function statics, `$GLOBALS` | the application, shared on purpose | no |
@@ -521,7 +525,7 @@ PHP 8.7.
 
 ### To SAPIs
 
-None for the primary proposal: code outside any scope runs in the root scope and sees what it sees today. Under secondary vote A, the five request superglobals are the SAPI's arrays in the root scope and follow the scope elsewhere; SAPIs keep populating them as now.
+None for the primary proposal: code outside any scope runs in the root scope and sees what it sees today. Under secondary vote A, the six request superglobals are the SAPI's arrays in the root scope and follow the scope elsewhere; SAPIs keep populating them as now.
 
 ### To Existing Extensions
 
@@ -634,7 +638,7 @@ Primary vote, 2/3 majority:
 
 Secondary votes, 50%+1 each, counted only if the primary passes; B does not depend on A:
 
-- A. Should `$_GET`, `$_POST`, `$_COOKIE`, `$_FILES` and `$_REQUEST` follow the current scope as described?
+- A. Should `$_GET`, `$_POST`, `$_COOKIE`, `$_FILES`, `$_REQUEST` and `$_SERVER` follow the current scope as described?
 - B. Should the default locale and the default timezone follow the current scope as described?
 
 Generators are part of the main proposal rather than a separate vote. Leaving them out would not
