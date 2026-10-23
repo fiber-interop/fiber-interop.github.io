@@ -1,6 +1,6 @@
 # PHP RFC: Scope
 
-- Version: 0.8
+- Version: 0.9
 - Date: 2026-10-23
 - Author: Frode Børli
 - Status: Draft
@@ -308,17 +308,21 @@ This RFC proposes the identity and converts no engine state, except two cases, e
 to show the shape of the rest and useful enough on its own to decide separately. This is the first.
 
 Of PHP's superglobals, six describe the current request: `$_GET`, `$_POST`, `$_COOKIE`, `$_FILES`,
-`$_REQUEST` and `$_SERVER`. `$_ENV` describes the process and `$_SESSION` belongs to ext/session;
-they are not proposed here. Today a process that serves several requests at once has one copy of
-each of the six, so every long-running PHP server either rewrites them behind the application's
-back or tells its users not to touch them.
+`$_REQUEST` and `$_SERVER`; a seventh, `$_SESSION`, holds the request's session together with the
+rest of ext/session's state. `$_ENV` describes the process and is not proposed here. Today a process
+that serves several requests at once has one copy of each, so every long-running PHP server either
+rewrites them behind the application's back or tells its users not to touch them, and
+`session_start()` in one request replaces another's session.
 
-With a yes on this vote, the six arrays follow the scope:
+With a yes on this vote, the request superglobals and the session follow the scope:
 
 - The root scope's arrays are the ones the SAPI populates: unchanged behaviour for every script
   that never creates a scope.
-- A new scope starts with its own copies of the six arrays as they are in the scope that
-  creates it. Arrays are copy-on-write, so this costs nothing until one of them is written.
+- A new scope starts empty: the six arrays are empty and no session is active
+  (`session_status()` is `PHP_SESSION_NONE`). Whoever creates the scope seeds it, as a server does
+  for each request. A new scope does not inherit its creator's values: a copy of an array is
+  shallow, so objects in it would stay shared with the creator, and an inherited copy would
+  promise an isolation it cannot give.
 - An assignment to one of the six inside a scope changes only that scope's array. Reads see the
   current scope's array. All fibers and generators of the scope share it, as the rules above
   give.
@@ -328,23 +332,34 @@ With a yes on this vote, the six arrays follow the scope:
   request two inconsistent views of its input, which is why it is in the set.
 - `$_SERVER` mixes request facts (`REQUEST_URI`, `REQUEST_METHOD`, the `HTTP_*` entries,
   `REMOTE_ADDR`, `HTTPS`) with the environment (`PATH`, `DOCUMENT_ROOT`, what the application put
-  there while booting). Both follow from the rule above: a request's scope starts with a copy of its
-  creator's `$_SERVER`, environment included, and the server writes the request's entries into it.
-  Leaving it shared would leave a request's own URI, method, headers and client address to whichever
-  request wrote them last: read after the request's first suspension, they would be another
-  request's, silently.
+  there while booting). A request's scope starts with an empty `$_SERVER` like the others, and the
+  server writes both into it: the environment entries it wants the request to see, then the
+  request's own. Leaving it shared would leave a request's own URI, method, headers and client
+  address to whichever request wrote them last: read after the request's first suspension, they
+  would be another request's, silently.
+- The session is the scope's: `session_start()` inside a scope starts that scope's session, and
+  its state (`$_SESSION`, the session id and status, the save handler and its data, the cookie
+  parameters and the cache limiter) is the scope's alone. All fibers and generators of the scope
+  share it, as they share the scope's other superglobals. A scope has no end state (see above), so
+  the session is written and closed when the server calls `session_write_close()` inside the scope
+  at the end of the request, or at the latest when the scope is destroyed with the session still
+  active, as at the end of a request today. The headers
+  `session_start()` sends (`Set-Cookie`, the cache limiter's) belong to the scope's response:
+  until per-scope headers have their own RFC (see Future Scope), a server that hosts several
+  requests in one process must route them, as it already routes the rest of each response.
 
 No method is added to `Scope`, and nothing decides who fills the arrays. A server does what it
 does today, inside the scope:
 
 ```php
+$env   = $_SERVER;  // the process's environment, read once in the root scope
 $scope = new Scope();
-$scope->run(function () use ($request, $handler) {
+$scope->run(function () use ($request, $handler, $env) {
     $_GET    = $request->query;
     $_POST   = $request->parsedBody;
     $_COOKIE = $request->cookies;
     $_FILES  = $request->uploads;
-    $_SERVER = $request->serverParams + $_SERVER; // the request's entries over the environment
+    $_SERVER = $request->serverParams + $env; // the request's entries over the environment
     $handler->handle();        // every fiber of this request sees these; no other request does
 });
 ```
@@ -374,14 +389,14 @@ auto-globals) is what the php-src patch must demonstrate, and the RFC's claim is
 that patch. Under ZTS each thread has its own symbol table, so the per-thread arrays nest inside it
 as the root of that thread.
 
-**Why these six and why now.** They are the state the introduction's long-running-server
+**Why these and why now.** They are the state the introduction's long-running-server
 argument is about; converting them demonstrates the backward-compatibility rule (code outside a
 scope sees the SAPI's arrays) on real state rather than asserting it; and the mechanism, swap on
 switch, is the one the follow-up RFC generalises, so a yes here settles its shape with the
-smallest possible surface. With all six, vote A isolates the whole of a request's input, its
-`$_SERVER` entries included.
+smallest possible surface. With all seven, vote A isolates the whole of a request's input, its
+`$_SERVER` entries included, and its session.
 
-**Reference implementation.** The accompanying extension implements this vote: the six arrays are swapped in the symbol table (and `PG(http_globals)`) at every scope change, a new scope takes copy-on-write references to its creator's arrays, and the lazily created auto-globals are forced at the first scope creation so a later-compiled `$_GET` read cannot re-arm the engine's JIT callback over a scope's array. It is on by default and can be turned off with `scope.superglobals=0` so this vote can be evaluated independently. The userland polyfill does the same when an event loop reports a change of scope; the interoperability project where this is measured across event loops (https://fiber-interop.github.io/conformance.html, column "Scope state") shows which loops can report every switch and which cannot, which is the case for doing it in the
+**Reference implementation.** The accompanying extension implements this vote: the six arrays are swapped in the symbol table (and `PG(http_globals)`) at every scope change (version 0.9 of this text changed the rule for a new scope from inheriting its creator's arrays to starting empty, and added the session; the extension and the polyfill are being updated to match, and the phasync extension's `sapi()` already swaps ext/session's state per request), and the lazily created auto-globals are forced at the first scope creation so a later-compiled `$_GET` read cannot re-arm the engine's JIT callback over a scope's array. It is on by default and can be turned off with `scope.superglobals=0` so this vote can be evaluated independently. The userland polyfill does the same when an event loop reports a change of scope; the interoperability project where this is measured across event loops (https://fiber-interop.github.io/conformance.html, column "Scope state") shows which loops can report every switch and which cannot, which is the case for doing it in the
 
 ### Secondary vote B: the default locale and timezone follow the scope
 
@@ -389,8 +404,9 @@ smallest possible surface. With all six, vote A isolates the whole of a request'
 `date_default_timezone_set()` are ambient settings of the current operation: code sets them to
 interpret and format values for the request it is serving, and a server that hosts several
 requests at once has today one value of each for all of them. With a yes on this vote they follow
-the scope with the same rules as the superglobals: the root scope's values are today's (from ini
-and the SAPI), a new scope inherits its creator's values, a change inside a scope affects only
+the scope: the root scope's values are today's (from ini and the SAPI), a new scope inherits its
+creator's values (unlike the superglobals, these are plain strings, so inheriting them shares
+nothing), a change inside a scope affects only
 that scope, and code outside any scope sees no change. Inheritance is what makes the rule useful
 for the common case, a sub-operation that formats dates for the request it belongs to, while a
 scope that needs its own setting changes it locally. The implementation is the same swap on
@@ -412,7 +428,7 @@ logical operation, not state merely because it is global.**
 
 | State | Belongs to | Follows the scope |
 |---|---|---|
-| `$_GET`, `$_POST`, `$_COOKIE`, `$_FILES`, `$_REQUEST`, `$_SERVER` | the request | yes (vote A) |
+| `$_GET`, `$_POST`, `$_COOKIE`, `$_FILES`, `$_REQUEST`, `$_SERVER`, `$_SESSION` and ext/session's state | the request | yes (vote A); a new scope starts empty |
 | default locale, default timezone | the operation | yes (vote B) |
 | output buffers, error and exception handlers, `ini_set()` values | the operation | later, one RFC each |
 | `json_last_error()`, `preg_last_error()`, `error_get_last()` | the call just made | no: see below |
@@ -525,7 +541,7 @@ PHP 8.7.
 
 ### To SAPIs
 
-None for the primary proposal: code outside any scope runs in the root scope and sees what it sees today. Under secondary vote A, the six request superglobals are the SAPI's arrays in the root scope and follow the scope elsewhere; SAPIs keep populating them as now.
+None for the primary proposal: code outside any scope runs in the root scope and sees what it sees today. Under secondary vote A, the six request superglobals and the session are the SAPI's in the root scope and follow the scope elsewhere, a new scope starting empty; SAPIs keep populating them as now.
 
 ### To Existing Extensions
 
@@ -566,8 +582,7 @@ code outside scopes sees the state it sees today, so a subsystem can be converte
 without breaking that code.
 
 Each conversion also has to decide how a new scope's state starts: fresh, as in a new request, or
-as a copy of the state current when the scope was created. Output buffers are left to their own RFC. The two secondary votes settle it for their state: a new scope
-inherits its creator's values (copy-on-write for arrays), and changes inside it stay inside it.
+as a copy of the state current when the scope was created. Output buffers are left to their own RFC. The two secondary votes settle it for their state: under vote A a new scope starts empty, as a new request does; under vote B it inherits its creator's locale and timezone. In both, changes inside a scope stay inside it.
 
 ## Future Scope
 
@@ -638,7 +653,7 @@ Primary vote, 2/3 majority:
 
 Secondary votes, 50%+1 each, counted only if the primary passes; B does not depend on A:
 
-- A. Should `$_GET`, `$_POST`, `$_COOKIE`, `$_FILES`, `$_REQUEST` and `$_SERVER` follow the current scope as described?
+- A. Should `$_GET`, `$_POST`, `$_COOKIE`, `$_FILES`, `$_REQUEST`, `$_SERVER` and the session (`$_SESSION` and ext/session's state) follow the current scope as described, a new scope starting empty?
 - B. Should the default locale and the default timezone follow the current scope as described?
 
 Generators are part of the main proposal rather than a separate vote. Leaving them out would not
