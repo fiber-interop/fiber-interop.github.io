@@ -562,7 +562,12 @@ sampled PHP files on GitHub declare a global `class Context`, 3 of 100 a global 
   in a namespace are unaffected. Of the first 100 results of a GitHub code search for PHP files
   declaring `class Scope`, 88 are namespaced, and 2 declare it in the global namespace: a toy
   interpreter in a multi-language repository, and a project last changed in 2018 (a second sample
-  on 2026-10-14 found 3 of 100).
+  on 2026-10-14 found 3 of 100). None of the top 1000 Composer packages (Packagist's list of
+  2026-10-26, latest stable versions, 998 downloaded and parsed with nikic/php-parser) declares a
+  class, interface, trait or enum named `Scope` in the global namespace, or aliases one to it. 34
+  declarations in 14 packages are namespaced (among them Laravel's `Illuminate\Database\Eloquent\Scope`,
+  Sentry and league/fractal) and are unaffected; the one non-namespaced file that refers to
+  `Scope` imports `PHPStan\Analyser\Scope` with `use`.
 
 ## Proposed PHP Version(s)
 
