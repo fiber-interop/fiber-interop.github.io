@@ -10,81 +10,69 @@
 
 ## Introduction
 
-`Scope` gives PHP code a standard way to identify the logical operation it belongs to, such as an
-HTTP request, a queued job or a transaction, and preserves that identity across fibers and
-generators. It is a
-parallel to `Fiber`: a fiber is a unit of execution, and a scope is the unit of work that one or
-more executions belong to.
-
-A single logical operation in PHP, such as an HTTP request in a long-running server, often runs in
-several fibers. A request handler may spawn fibers for parallel database queries, for streaming
-a response, or for background work that outlives the response. Libraries such as ReactPHP, AMPHP,
-Revolt and phasync create fibers, and queue callbacks, on the application's behalf. PHP has no way
-to say that this work belongs together. With `Scope` it can:
+PHP has no representation of a request. Its state is either process-wide or, under ZTS, per
+thread, and the request exists only as a phase of the process: whatever runs between request
+startup and shutdown. While one process served one request at a time, that was enough. This RFC
+proposes `Scope`, an object that stands for one unit of work, such as an HTTP request, a queued job
+or a CLI command, so that code can create one, run code in it, and ask which one is current.
 
 ```php
-// A server runs each request in its own scope:
+// A server runs each request in a scope of its own:
 (new Scope())->run($handler, $request);
 
-// Anywhere in that request, including in fibers that the handler or its libraries start,
-// Scope::getCurrent() returns the same object, so request-lifetime state can be keyed by it:
+// Code anywhere in that request can ask which request it belongs to:
 $this->connections ??= new WeakMap();
 $db = $this->connections[Scope::getCurrent()] ??= new PDO($dsn);
 ```
 
-Other languages have one. Java (`ScopedValue`, JDK 25), Kotlin (`CoroutineContext`), .NET
-(`ExecutionContext`, `AsyncLocal<T>`), Python (`contextvars`), Go (`context.Context`) and
-JavaScript (`AsyncLocalStorage`, the `AsyncContext` proposal) each preserve an ambient context
-across changes of execution, and Java and .NET enterprise frameworks build request-scoped services
-on it. This RFC extracts the one requirement they share, an identity for the current operation
-that follows execution, and gives it a minimal PHP-native form; the rest is left to libraries, as
-PHP's design has left scheduling to them since fibers (see Prior art).
+Long-running PHP servers serve many requests in one process, one after another or interleaved,
+and each of them reinvents the request. Frameworks reset their state between requests, containers
+key request-lifetime services by whatever identity the runtime offers, and event loops track
+which work belongs together in their own way. Code that needs to know which request it is serving
+has nothing in the language to ask.
 
-The deployment this makes possible is concrete. A long-running worker serves thousands of concurrent
-requests, each a scope on its own fibers, and a machine runs one worker per core: under NTS as
-processes, under ZTS as threads of one process sharing one opcache and one memory space. Ten
-thousand concurrent requests on eight threads is about 1,250 scopes per thread. Concurrency within a
-worker comes from fibers and scopes, parallelism across cores from threads or processes, and the two
-compose (see Threads).
+Three things need a request scope.
 
-Three things need that identity.
+**Request-lifetime services.** A container offers services with a request lifetime (Laravel's
+scoped bindings, `Lifetime::Scoped` in Mini), and it needs to know which request is current to key
+them by. A long-running server today either resets the container between requests, which works
+only while requests never overlap, or keys services by `Fiber::getCurrent()`, which breaks as soon
+as a request starts a second fiber: the container then creates a second session, a second database
+connection, a second unit of work, inside the same request. A logger that adds a request id, a
+tracing span and a per-request cache need the same anchor.
 
-**Service containers.** A container offers services with a request lifetime (Laravel's scoped
-bindings, `Lifetime::Scoped` in Mini), and it needs an identity for "the current request" to key
-them by. In a long-running server, the identity has to come from the running code, and the closest
-thing PHP offers is `Fiber::getCurrent()`. That breaks as soon as the request spawns a fiber: the
-child is a different fiber, so the container creates a second session, a second database
-connection, a second unit of work, inside the same request. In a long-running server without
-fibers there is no identity at all. The same anchor is missing for a logger that adds a request
-id, a tracing span, or a per-request cache.
+**Request state in the engine.** PHP keeps per-request state in process-wide (or per-thread)
+globals: the superglobals, the session, the output buffers, the default locale and timezone, error
+handlers, ini values. PHP resets that state between requests, but while a request runs, the state
+belongs to the process, not to the request, because there is nothing that represents the request
+to hold it. A scope is that owner. This RFC provides it, and two secondary votes move the first
+state into it: the request superglobals with the session, and the default locale and timezone.
+Moving more state is for later RFCs (see Future Scope). Code that never creates a scope runs in the
+root scope and keeps today's behaviour exactly.
 
-**Interoperability.** Each event loop today invents its own way to track which work belongs
-together. phasync, for example, records the context of every fiber it creates and exposes it as
-`phasync::getContext()`. That works, but a library that relies on it now depends on phasync, and
-the same library under another event loop needs that loop's equivalent, if it has one. The
-identity has to come from the language to be shared by all of them.
+**Interoperability.** Each runtime today invents its own request identity; phasync, for example,
+exposes `phasync::getContext()`. A library that relies on one runtime's identity is tied to that
+runtime. An identity shared by all of them has to come from the language.
 
-**Global state.** PHP keeps much per-request state in process-wide globals: the output buffers,
-the default locale (`Locale::setDefault()`), the default timezone
-(`date_default_timezone_set()`), error handlers, ini values. When one process runs several
-operations at once, that state leaks between them, and moving it somewhere safer needs an owner.
-Tying it to fiber execution, as the per-coroutine stores of the
-[Concurrency Support in the PHP Engine](https://wiki.php.net/rfc/async_scheduler_abi) RFC would
-(a new coroutine starts empty, with `ob_start()` named as the first state to move), is backward
-incompatible. Today every fiber shares the output buffers: code that starts a fiber inside
-`ob_start()` gets the fiber's output in that buffer, and a fiber sees the locale and timezone that
-were set before it started. Per-fiber state would change both. A scope matches how code already
-behaves: the fibers of one operation share its state, and code that never runs in a scope keeps
-today's global behaviour exactly. This RFC provides the owner; moving each subsystem's state into
-it is for later RFCs (see Future Scope).
+A scope is also the groundwork for making PHP a good language for concurrent programming. In a
+long-running server, one request may run in several fibers: parallel database queries, a streamed
+response, background work that outlives the response, often started by libraries on the
+application's behalf. A scope follows its request into the fibers and generators created in it, so
+"which request is this" keeps its answer when the request runs concurrently, and per-request state
+has an owner that is neither the process nor a single fiber. Tying that state to each fiber
+instead, as the per-coroutine stores of the
+[Concurrency Support in the PHP Engine](https://wiki.php.net/rfc/async_scheduler_abi) RFC would (a
+new coroutine starts empty, with `ob_start()` named as the first state to move), is backward
+incompatible: today every fiber shares the output buffers, locale and timezone of the code that
+started it. The fibers of one scope share its state, which is how code already behaves. The
+Concurrency Support RFC needs such a unit of work and doesn't define one; the two compose, and
+engine coroutines that need not be `Fiber` objects would get scope membership exactly as fibers do.
 
-The Concurrency Support RFC needs such a unit of work and doesn't define one; this RFC provides
-it, orthogonally. The two compose: engine coroutines that need not be `Fiber` objects would get
-scope membership exactly as fibers do.
-
-Most languages with lightweight concurrency have this primitive already (see Prior art). This RFC
-proposes the identity. Two secondary votes let the request superglobals, and the default locale
-and timezone, follow it. Nothing else changes.
+Java (`ScopedValue`), .NET (`ExecutionContext`, `AsyncLocal<T>`), Python (`contextvars`), Go
+(`context.Context`) and JavaScript (`AsyncLocalStorage`, the `AsyncContext` proposal) each have
+this primitive, and Java and .NET enterprise frameworks build request-scoped services on it (see
+Prior art). This RFC proposes its PHP-native form: an identity for the current unit of work that
+follows execution. Everything built on that identity is left to libraries and to later RFCs.
 
 ## Proposal
 
