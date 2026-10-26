@@ -3,9 +3,9 @@
 - Version: 0.9.1
 - Date: 2026-10-26
 - Author: Frode Børli, <frode@ennerd.com>
-- Status: Draft
+- Status: Under Discussion
 - Implementation: <https://github.com/fiber-interop/ext-scope> (extension); php-src pull request to follow
-- Discussion thread: tbd
+- Discussion thread: <https://externals.io/message/132934>
 - Voting thread: tbd
 
 ## Introduction
@@ -470,4 +470,4 @@ Engine state currently has process/thread and PHP-request lifetimes. `Scope` add
 
 ## Changelog
 
-- 0.9.1 (2026-10-26): first version on the wiki.
+- 0.9.1 (2026-10-26): first version on the wiki; announced on internals.
