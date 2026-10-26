@@ -1,11 +1,12 @@
 # PHP RFC: Scope
 
 - Version: 0.9.1
-- Date: 2026-10-23
-- Author: Frode Børli
+- Date: 2026-10-26
+- Author: Frode Børli, frode@ennerd.com
 - Status: Draft
-- First Published at: (not yet published; intended location https://wiki.php.net/rfc/scope)
-- Target: PHP 8.7
+- Implementation: https://github.com/fiber-interop/ext-scope (extension); php-src pull request to follow
+- Discussion thread: tbd
+- Voting thread: tbd
 
 ## Introduction
 
@@ -19,7 +20,17 @@ A single logical operation in PHP, such as an HTTP request in a long-running ser
 several fibers. A request handler may spawn fibers for parallel database queries, for streaming
 a response, or for background work that outlives the response. Libraries such as ReactPHP, AMPHP,
 Revolt and phasync create fibers, and queue callbacks, on the application's behalf. PHP has no way
-to say that this work belongs together.
+to say that this work belongs together. With `Scope` it can:
+
+```php
+// A server runs each request in its own scope:
+(new Scope())->run($handler, $request);
+
+// Anywhere in that request, including in fibers that the handler or its libraries start,
+// Scope::getCurrent() returns the same object, so request-lifetime state can be keyed by it:
+$this->connections ??= new WeakMap();
+$db = $this->connections[Scope::getCurrent()] ??= new PDO($dsn);
+```
 
 Other languages have one. Java (`ScopedValue`, JDK 25), Kotlin (`CoroutineContext`), .NET
 (`ExecutionContext`, `AsyncLocal<T>`), Python (`contextvars`), Go (`context.Context`) and
@@ -567,9 +578,17 @@ sampled PHP files on GitHub declare a global `class Context`, 3 of 100 a global 
 
 ## Proposed PHP Version(s)
 
-PHP 8.7.
+Next PHP 8.x (PHP 8.7).
 
 ## RFC Impact
+
+### To the Ecosystem
+
+IDEs, language servers and static analysers need stubs for the `Scope` class and the two new
+`getScope()` methods; nothing in the syntax changes. Libraries can adopt `Scope` before it ships:
+the polyfill `fiber-interop/scope` declares the same class on PHP 8.2 and later when the engine
+doesn't, and event loops adopt it with the callback pattern above. Containers, loggers and tracers
+that key state by `Fiber::getCurrent()` today can key it by `Scope::getCurrent()` instead.
 
 ### To SAPIs
 
@@ -677,7 +696,7 @@ The [Concurrency Support](https://wiki.php.net/rfc/async_scheduler_abi) RFC intr
 coroutines that need not be `Fiber` objects. A scheduler built on it would give those coroutines
 the same scope membership.
 
-## Proposed Voting Choices
+## Voting Choices
 
 Primary vote, 2/3 majority:
 
@@ -779,3 +798,7 @@ rather than competing with them.
   a request whose fibers must share its state; most PHP deployments are NTS and the extension
   ecosystem is less exercised under ZTS; and the two are not alternatives, since scopes work
   inside each thread.
+
+## Changelog
+
+- 0.9.1 (2026-10-26): first version on the wiki.
