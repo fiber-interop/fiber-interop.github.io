@@ -415,7 +415,7 @@ Generators are part of the main proposal rather than a separate vote. Leaving th
 
 ## Patches and Tests
 
-An extension implementing this RFC, including both secondary votes, is released for PHP 8.2 to 8.5 as `fiber-interop/ext-scope` 0.4.0 (<https://github.com/fiber-interop/ext-scope>, `pie install fiber-interop/ext-scope`), with phpt tests for each rule in this text. A userland polyfill with the same class and tests is `fiber-interop/scope` 0.4.0. A pull request against php-src master will accompany the RFC before the vote.
+An extension implementing this RFC, including both secondary votes, is released for PHP 8.2 to 8.5 as `fiber-interop/ext-scope` 0.4.2 (<https://github.com/fiber-interop/ext-scope>, `pie install fiber-interop/ext-scope`), with phpt tests for each rule in this text. A userland polyfill with the same class and tests is `fiber-interop/scope` 0.4.0. A pull request against php-src master will accompany the RFC before the vote.
 
 ## Implementation
 
@@ -439,6 +439,9 @@ An extension cannot add fields directly to native fiber and generator objects. T
 | Function call | ~23 ns | ~23 ns |
 | Generator step | ~37 ns | ~57 ns |
 | Fiber resume and suspend | ~110 ns | ~141 ns |
+| Generator step in another scope (switch in and back out) | n/a | ~240 ns |
+
+The last row is a generator created in one scope and stepped from another, so every step switches the six superglobals, the session, and the locale and timezone in and back out. It is the cost of interleaving operations, paid only when the current scope changes.
 
 These figures measure the extension's hash-table-based approach, not the proposed php-src implementation. In core, each fiber and generator can hold a scope pointer directly. The php-src patch will include its own measurements.
 
