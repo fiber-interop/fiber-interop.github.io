@@ -2,7 +2,7 @@
 
 - Version: 0.9.1
 - Date: 2026-10-26
-- Author: Frode Børli, <frodeborli@gmail.com>
+- Author: Frode Børli, <frode@ennerd.com>
 - Status: Draft
 - Implementation: <https://github.com/fiber-interop/ext-scope> (extension); php-src pull request to follow
 - Discussion thread: tbd
