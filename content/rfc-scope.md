@@ -357,7 +357,7 @@ None.
 
 No unresolved API decisions are listed. The remaining work is implementation validation.
 
-The extension has phpt tests for the described rules and secondary votes on PHP 8.2 through 8.5, with and without opcache. The JIT and the php-src implementation still need to be tested. The php-src patch will put the current scope in executor globals and is planned before voting.
+The extension has phpt tests for the described rules and secondary votes on PHP 8.2 through 8.5, with and without opcache, and they also pass under the tracing and the function JIT on PHP 8.5. The php-src implementation still needs to be written and tested. It will put the current scope in executor globals and is planned before voting.
 
 ## Unaffected PHP Functionality
 
@@ -431,13 +431,13 @@ The tests cover, among other things:
 - a generator running inside a fiber that suspends while the generator is inside a `run()` call: the generator and the fiber both find their scope again when resumed. (A generator can't `yield` while a `run()` call is active in its own body: a `yield` inside the callback makes the callback a generator.)
 - `unset($_GET)` inside a scope does not affect another scope or the root; `global $_GET` inside a function called in a scope binds to that scope's array; a scope that only reads the arrays owns no copies.
 
-An extension cannot add fields directly to native fiber and generator objects. The prototype therefore uses a `WeakMap` and observer hooks. On PHP 8.5, x86-64, the measured costs are:
+An extension cannot add fields directly to native fiber and generator objects. The prototype therefore keeps each one's scope in a `WeakMap`, follows fibers through the fiber switch observer, and compiles scope switches into generator bodies; ordinary calls pay nothing. Measured on PHP 8.5.12, x86-64, with opcache on and the JIT off (median of 5 runs):
 
-|                          | Without | With the extension |
-|:------------------------:|---------|--------------------|
-|      Function call       | ~25 ns  | ~29 ns             |
-|      Generator step      | ~38 ns  | ~79 ns             |
-| Fiber resume and suspend | ~108 ns | ~163 ns            |
+| | Without | With the extension |
+|---|---|---|
+| Function call | ~23 ns | ~23 ns |
+| Generator step | ~37 ns | ~57 ns |
+| Fiber resume and suspend | ~110 ns | ~141 ns |
 
 These figures measure the extension's hash-table-based approach, not the proposed php-src implementation. In core, each fiber and generator can hold a scope pointer directly. The php-src patch will include its own measurements.
 
