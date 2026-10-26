@@ -1,6 +1,6 @@
 # PHP RFC: Scope
 
-- Version: 0.9
+- Version: 0.9.1
 - Date: 2026-10-23
 - Author: Frode Børli
 - Status: Draft
@@ -94,7 +94,8 @@ final class Scope
      * Returns a closure that, whenever and wherever it is called, runs $closure with this scope
      * as the current scope, as run() does. The returned closure keeps $closure's signature
      * (by-reference parameters, defaults, return type), $this and class scope. $closure itself is
-     * not modified, as with Closure::bind().
+     * not modified, as with Closure::bind(). Binding a closure that bind() returned replaces
+     * its scope.
      */
     public function bind(Closure $closure): Closure {}
 
@@ -140,7 +141,8 @@ A `Scope` identifies one operation. It carries no data and no behaviour beyond `
    innermost executing context, fiber or generator, together with any `run()` active inside that
    context; a `run()` active in a caller never overrides the membership of a generator or fiber it resumes.
 5. Functions and closures run in the scope of their caller. A closure returned by
-   `$scope->bind($closure)` runs in `$scope`, whoever calls it.
+   `$scope->bind($closure)` runs in `$scope`, whoever calls it. Binding a closure that `bind()`
+   returned replaces its scope: `$a->bind($b->bind($f))` runs `$f` in `$a`.
 6. In `{main}`, outside any `run()`, and in fibers and generators
    created there, the current scope is the root scope, `Scope::getRootScope()`. The root scope is a
    single object that lives for the whole process (or request, under a SAPI that serves several).
@@ -693,7 +695,7 @@ incompatible change.
 
 ## Patches and Tests
 
-An extension implementing this RFC, including both secondary votes, is released for PHP 8.2 to 8.5 as `fiber-interop/ext-scope` 0.3.0 (https://github.com/fiber-interop/ext-scope, `pie install fiber-interop/ext-scope`), with phpt tests for each rule in this text. A userland polyfill with the same class and tests is `fiber-interop/scope` 0.3.0. A pull request against php-src master will accompany the RFC before the vote.
+An extension implementing this RFC, including both secondary votes, is released for PHP 8.2 to 8.5 as `fiber-interop/ext-scope` 0.4.0 (https://github.com/fiber-interop/ext-scope, `pie install fiber-interop/ext-scope`), with phpt tests for each rule in this text. A userland polyfill with the same class and tests is `fiber-interop/scope` 0.4.0. A pull request against php-src master will accompany the RFC before the vote.
 
 ## Implementation
 
