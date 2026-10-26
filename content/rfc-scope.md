@@ -101,7 +101,7 @@ final class Scope
     /** The current scope. In {main} outside any run(), and in fibers and generators created there, the root scope. */
     public static function getCurrent(): Scope {}
 
-    /** The scope that stands for code that is part of no operation. One object for the life of the process. */
+    /** The scope that stands for code that is part of no operation. One object per PHP request: in the CLI, for the life of the process. */
     public static function getRootScope(): Scope {}
 }
 
@@ -144,7 +144,8 @@ A `Scope` identifies one operation. It carries no data and no behaviour beyond `
    returned replaces its scope: `$a->bind($b->bind($f))` runs `$f` in `$a`.
 6. In `{main}`, outside any `run()`, and in fibers and generators
    created there, the current scope is the root scope, `Scope::getRootScope()`. The root scope is a
-   single object that lives for the whole process (or request, under a SAPI that serves several).
+   single object that lives as long as the PHP request: under the CLI that is the whole process, under
+   a SAPI that serves several requests per process, such as php-fpm, there is one root per request.
 7. A destructor runs in the scope that is current when its object is released, like any other
    function. An object released during another operation's `run()` therefore runs its destructor
    in that operation's scope. An object that needs its own scope at destruction captures it when
@@ -427,7 +428,7 @@ switch, is the one the follow-up RFC generalises, so a yes here settles its shap
 smallest possible surface. With all seven, vote A isolates the whole of a request's input, its
 `$_SERVER` entries included, and its session.
 
-**Reference implementation.** The accompanying extension implements this vote: the six arrays are swapped in the symbol table (and `PG(http_globals)`) at every scope change together with ext/session's state (version 0.9 of this text changed the rule for a new scope from inheriting its creator's arrays to starting empty, and added the session; the extension and the polyfill implement this since 0.4.0, and `scope.session=0` leaves the session process-wide), and the lazily created auto-globals are forced at the first scope creation so a later-compiled `$_GET` read cannot re-arm the engine's JIT callback over a scope's array. It is on by default and can be turned off with `scope.superglobals=0` so this vote can be evaluated independently. The userland polyfill does the same when an event loop reports a change of scope; the interoperability project where this is measured across event loops (https://fiber-interop.github.io/conformance.html, column "Scope state") shows which loops can report every switch and which cannot, which is the case for doing it in the
+**Reference implementation.** The accompanying extension implements this vote: the six arrays are swapped in the symbol table (and `PG(http_globals)`) at every scope change together with ext/session's state (version 0.9 of this text changed the rule for a new scope from inheriting its creator's arrays to starting empty, and added the session; the extension and the polyfill implement this since 0.4.0, and `scope.session=0` leaves the session process-wide), and the lazily created auto-globals are forced at the first scope creation so a later-compiled `$_GET` read cannot re-arm the engine's JIT callback over a scope's array. It is on by default and can be turned off with `scope.superglobals=0` so this vote can be evaluated independently. The userland polyfill does the same when an event loop reports a change of scope; the interoperability project where this is measured across event loops (https://fiber-interop.github.io/conformance.html, column "Scope state") shows which loops can report every switch and which cannot, which is the case for doing it in the engine.
 
 ### Secondary vote B: the default locale and timezone follow the scope
 
@@ -605,7 +606,13 @@ None.
 
 ## Open Issues
 
-None at present. See the Discussion section for the case for and against converting engine state together with the primitive.
+None in the design. See the Discussion section for the case for and against converting engine state together with the primitive.
+
+The extension (see Patches and Tests) demonstrates every rule in this text and both secondary votes,
+including the engine interactions they depend on (the lazily created auto-globals, ext/session's
+state), with phpt tests on PHP 8.2 to 8.5, run with and without opcache. Still to be demonstrated
+are a run under the JIT and the php-src implementation itself, which keeps the current scope in the
+executor globals and will accompany the RFC before the vote.
 
 ## Unaffected PHP Functionality
 
