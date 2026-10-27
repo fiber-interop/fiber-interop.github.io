@@ -1,6 +1,6 @@
 # PHP RFC: Scope
 
-- Version: 0.9.2
+- Version: 0.9.3
 - Date: 2026-10-27
 - Author: Frode Børli, <frode@ennerd.com>
 - Status: Under Discussion
@@ -245,7 +245,7 @@ If vote A passes, each scope has its own request arrays and session:
 - `$_REQUEST` is a scope-local snapshot like the others, not a live merge: a scope that assigns `$_GET` and relies on `$_REQUEST` assigns it too, as code that assigns `$_GET` must today. Leaving `$_REQUEST` shared while the three it is built from are per scope would give one request two inconsistent views of its input, which is why it is in the set.
 - `$_SERVER` mixes request facts (`REQUEST_URI`, `REQUEST_METHOD`, the `HTTP_*` entries, `REMOTE_ADDR`, `HTTPS`) with the environment (`PATH`, `DOCUMENT_ROOT`, what the application put there while booting). A request's scope starts with an empty `$_SERVER` like the others, and the server writes both into it: the environment entries it wants the request to see, then the request's own. Leaving it shared would leave a request's own URI, method, headers and client address to whichever request wrote them last: read after the request's first suspension, they would be another request's, silently.
 - The session is the scope's: `session_start()` inside a scope starts that scope's session, and its state (`$_SESSION`, the session id and status, the save handler and its data) is the scope's alone. The session's settings are not: the `session.*` ini entries, and `session_name()`, `session_set_cookie_params()` and the other functions that write them, stay request-wide like any `ini_set()` value. A started session can't have them changed, as today. All fibers and generators of the scope share it, as they share the scope's other superglobals. A scope has no end state (see above), so the session is written and closed when the server calls `session_write_close()` inside the scope at the end of the request, or at the latest when the scope is destroyed with the session still active, as at the end of a request today. The headers `session_start()` sends (`Set-Cookie`, the cache limiter's) belong to the scope's response: until per-scope headers have their own RFC (see Future Scope), a server that hosts several requests in one process must route them, as it already routes the rest of each response.
-- Save handlers that lock a session while it is open (files, memcached, redis) block the whole process when two scopes in it open the same session id at once, as a browser's parallel requests do: the second `session_start()` waits for a lock that only the first scope can release. Under php-fpm or ZTS the second request waits in its own process or thread. A server that runs requests as scopes needs a handler that waits cooperatively, or must not open one session id in two scopes at once.
+- A session whose save handler locks it while it is open can be active in only one scope of a process at a time. Otherwise a second scope opening the same session id, as a browser's parallel requests do, would wait for a lock that only the first scope can release, and the first scope cannot run while the process waits. `session_start()` therefore throws a `RuntimeException` when the save handler locks and the session id is active in another scope of the same process; the message does not contain the id. A lock held by another process or thread is not affected: `session_start()` waits for it as today. Save handlers that do not lock behave as they do under php-fpm, races included. The `read_and_close` option of `session_start()` avoids holding the lock while other scopes run, but it is not applied implicitly.
 
 The server remains responsible for initializing request data. It can do so inside the scope:
 
@@ -274,7 +274,7 @@ var_dump($_GET);                             // the SAPI's array: unchanged
 
 **References and globals.** `$GLOBALS['_GET']` and `global $_GET` refer to the current scope's value. A reference taken before switching scopes, such as `$g = &$_GET`, continues to refer to the earlier array. Switching scopes changes the global binding, not existing references.
 
-**Implementation.** The engine can swap six `zval` entries in the global symbol table on each scope switch, saving the old entries in the outgoing scope and loading those of the incoming scope. Arrays are not copied. Reads and writes retain their current cost. The extension's tests cover `PG(http_globals)`, the lazily created auto-globals, `unset($_GET)` and `global $_GET`; the php-src implementation must pass the same tests. Under ZTS, each thread has its own symbol table and root scope.
+**Implementation.** The engine can swap six `zval` entries in the global symbol table on each scope switch, saving the old entries in the outgoing scope and loading those of the incoming scope. Arrays are not copied. Reads and writes retain their current cost. The extension's tests cover `PG(http_globals)`, the lazily created auto-globals, `unset($_GET)` and `global $_GET`; the php-src implementation must pass the same tests. Under ZTS, each thread has its own symbol table and root scope. Whether a save handler locks is declared by a new field of `ps_module`: the files handler sets it, and modules such as the PECL redis and memcached handlers can set it from their own locking settings. A user handler built on `SessionHandler` locks when the handler it wraps does; other user handlers are taken not to lock.
 
 **Why include them now?** These are the request values that long-running servers already need to isolate. Moving them first tests the scope-switching mechanism against existing PHP behavior. The same approach can later apply to other engine state. Vote A covers request input and sessions together.
 
@@ -364,7 +364,9 @@ None.
 
 ## Open Issues
 
-No unresolved API decisions are listed. The remaining work is implementation validation.
+**Session locking within a process.** This RFC proposes that `session_start()` throws when a locking save handler's session id is active in another scope of the process. The alternative is to let both scopes share one session: one `$_SESSION` and one lock. That avoids the error, but gives up the isolation vote A otherwise provides.
+
+Apart from this, the remaining work is implementation validation.
 
 The extension has phpt tests for the described rules and secondary votes on PHP 8.2 through 8.5, NTS and ZTS, with and without opcache, and they also pass under the tracing and the function JIT on PHP 8.5. On ZTS builds, tests with the parallel extension run scopes in several threads at once. The php-src implementation still needs to be written and tested. It will put the current scope in executor globals and is planned before voting.
 
@@ -423,7 +425,7 @@ Generators are part of the main proposal rather than a separate vote. Leaving th
 
 ## Patches and Tests
 
-An extension implementing this RFC, including both secondary votes, is released for PHP 8.2 to 8.5 as `fiber-interop/ext-scope` 0.4.3 (<https://github.com/fiber-interop/ext-scope>, `pie install fiber-interop/ext-scope`), with phpt tests for each rule in this text. A userland polyfill with the same class and tests is `fiber-interop/scope` 0.4.0. A pull request against php-src master will accompany the RFC before the vote.
+An extension implementing this RFC, including both secondary votes, is released for PHP 8.2 to 8.5 as `fiber-interop/ext-scope` 0.4.4 (<https://github.com/fiber-interop/ext-scope>, `pie install fiber-interop/ext-scope`), with phpt tests for each rule in this text. A userland polyfill with the same class and tests is `fiber-interop/scope` 0.4.0. A pull request against php-src master will accompany the RFC before the vote.
 
 ## Implementation
 
@@ -481,3 +483,4 @@ Engine state currently has process/thread and PHP-request lifetimes. `Scope` add
 - 0.9.1 (2026-10-26): first version on the wiki; announced on internals.
 - 2026-10-27: implementation notes only: ext-scope 0.4.3, tested on ZTS builds with threads (parallel).
 - 0.9.2 (2026-10-27): Introduction rewritten; no change to the proposal.
+- 0.9.3 (2026-10-27): vote A: `session_start()` throws a `RuntimeException` instead of blocking the process when a locking save handler's session id is active in another scope of the process (ext-scope 0.4.4); listed under Open Issues.
