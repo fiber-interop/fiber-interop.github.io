@@ -1,7 +1,7 @@
 # PHP RFC: Scope
 
-- Version: 0.9.1
-- Date: 2026-10-26
+- Version: 0.9.2
+- Date: 2026-10-27
 - Author: Frode Børli, <frode@ennerd.com>
 - Status: Under Discussion
 - Implementation: <https://github.com/fiber-interop/ext-scope> (extension); php-src pull request to follow
@@ -10,7 +10,9 @@
 
 ## Introduction
 
-PHP has no object that represents a request. Most request state is stored in process-wide globals, or thread-local globals under ZTS. The request is simply the period between startup and shutdown. That works when a process handles one request at a time. It does not work as well when one process handles many requests, especially when they overlap. This RFC adds `Scope`: an object that identifies a unit of work, such as an HTTP request, queue job, or CLI command. Code can create a scope, run code in it, and get the current scope.
+PHP has no object that represents a request, because until now a request has been one run of the engine from startup to shutdown. PHP increasingly runs long-lived servers that handle many requests concurrently, some of them WebSockets that stay open, and these need a common way to tell requests apart. C# and Java solve this with a request scope: a framework or container ties services to it, for example one PDO connection per request.
+
+This RFC adds `Scope`: an object that identifies a unit of work, such as an HTTP request, a queue job or a CLI command. Code can create a scope, run code in it, and get the current scope. Code that never creates one runs in the root scope, a single object for the whole request, so nothing changes for it. A server creates a scope per request it handles. That gives services the three lifetimes known from other platforms: singleton, scoped and transient. A framework keeps request state in a `WeakMap` keyed by `Scope::getCurrent()`, and it is cleaned up as soon as the client request ends.
 
 ``` php
 // A server runs each request in a scope of its own:
@@ -472,3 +474,4 @@ Engine state currently has process/thread and PHP-request lifetimes. `Scope` add
 
 - 0.9.1 (2026-10-26): first version on the wiki; announced on internals.
 - 2026-10-27: implementation notes only: ext-scope 0.4.3, tested on ZTS builds with threads (parallel).
+- 0.9.2 (2026-10-27): Introduction rewritten; no change to the proposal.
