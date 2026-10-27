@@ -471,3 +471,4 @@ Engine state currently has process/thread and PHP-request lifetimes. `Scope` add
 ## Changelog
 
 - 0.9.1 (2026-10-26): first version on the wiki; announced on internals.
+- 2026-10-27: implementation notes only: ext-scope 0.4.3, tested on ZTS builds with threads (parallel).
