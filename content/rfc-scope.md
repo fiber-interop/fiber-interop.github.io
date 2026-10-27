@@ -10,9 +10,15 @@
 
 ## Introduction
 
+This RFC adds `Scope`: an object that identifies a unit of work, such as an HTTP request, a queue job or a CLI command.
+
 PHP has no object that represents a request, because until now a request has been one run of the engine from startup to shutdown. PHP increasingly runs long-lived servers that handle many requests concurrently, some of them WebSockets that stay open, and these need a common way to tell requests apart. C# and Java solve this with a request scope: a framework or container ties services to it, for example one PDO connection per request.
 
-This RFC adds `Scope`: an object that identifies a unit of work, such as an HTTP request, a queue job or a CLI command. Code can create a scope, run code in it, and get the current scope. Code that never creates one runs in the root scope, a single object for the whole request, so nothing changes for it. A server creates a scope per request it handles. That gives services the three lifetimes known from other platforms: singleton, scoped and transient. A framework keeps request state in a `WeakMap` keyed by `Scope::getCurrent()`, and it is cleaned up as soon as the client request ends.
+`Scope` is designed to complement Fibers and is the smallest possible primitive that PHP needs to further evolve asynchronous PHP in a way that is both backwards and forward compatible.
+
+It also gives request state an owner. Two secondary votes make the superglobals (`$_GET`, `$_POST` and the others) and the session, and the default locale and default timezone, follow the current scope. Async runtimes have long had to work around these being process-wide. Frameworks have tried to replace them with request objects, but that has fragmented the ecosystem: Symfony's HttpKernel, PSR-7, and PSR-7 itself used in different styles (double-pass middleware that is handed a response object, or PSR-15 handlers that return one). Code written for one does not run on another, while `$_GET` and `$_POST` work everywhere. They are the most portable request API PHP has, so code will keep using them however many abstractions frameworks add. With `Scope` they stay safe to use when one process serves many requests.
+
+Code can create a scope, run code in it, and get the current scope. Code that never creates one runs in the root scope, a single object for the whole request, so nothing changes for it. A server creates a scope per request it handles. That gives services the three lifetimes known from other platforms: singleton, scoped and transient. A framework keeps request state in a `WeakMap` keyed by `Scope::getCurrent()`, and it is cleaned up as soon as the client request ends.
 
 ``` php
 // A server runs each request in a scope of its own:
