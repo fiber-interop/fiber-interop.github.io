@@ -358,7 +358,7 @@ None.
 
 No unresolved API decisions are listed. The remaining work is implementation validation.
 
-The extension has phpt tests for the described rules and secondary votes on PHP 8.2 through 8.5, with and without opcache, and they also pass under the tracing and the function JIT on PHP 8.5. The php-src implementation still needs to be written and tested. It will put the current scope in executor globals and is planned before voting.
+The extension has phpt tests for the described rules and secondary votes on PHP 8.2 through 8.5, NTS and ZTS, with and without opcache, and they also pass under the tracing and the function JIT on PHP 8.5. On ZTS builds, tests with the parallel extension run scopes in several threads at once. The php-src implementation still needs to be written and tested. It will put the current scope in executor globals and is planned before voting.
 
 ## Unaffected PHP Functionality
 
@@ -415,7 +415,7 @@ Generators are part of the main proposal rather than a separate vote. Leaving th
 
 ## Patches and Tests
 
-An extension implementing this RFC, including both secondary votes, is released for PHP 8.2 to 8.5 as `fiber-interop/ext-scope` 0.4.2 (<https://github.com/fiber-interop/ext-scope>, `pie install fiber-interop/ext-scope`), with phpt tests for each rule in this text. A userland polyfill with the same class and tests is `fiber-interop/scope` 0.4.0. A pull request against php-src master will accompany the RFC before the vote.
+An extension implementing this RFC, including both secondary votes, is released for PHP 8.2 to 8.5 as `fiber-interop/ext-scope` 0.4.3 (<https://github.com/fiber-interop/ext-scope>, `pie install fiber-interop/ext-scope`), with phpt tests for each rule in this text. A userland polyfill with the same class and tests is `fiber-interop/scope` 0.4.0. A pull request against php-src master will accompany the RFC before the vote.
 
 ## Implementation
 
@@ -447,7 +447,7 @@ These figures measure the extension's hash-table-based approach, not the propose
 
 ### Threads
 
-Engine state currently has process/thread and PHP-request lifetimes. `Scope` adds an operation lifetime. It works within ZTS threads and does not replace them.
+Engine state currently has process/thread and PHP-request lifetimes. `Scope` adds an operation lifetime. It works within ZTS threads and does not replace them. The extension is tested that way: threads started with the parallel extension each create scopes, step fibers and generators of several scopes in turn, and keep superglobals, session, timezone and locale apart per scope and per thread.
 
 - The current scope and the root scope live in the executor globals, which ZTS makes per thread. Each thread has its own root scope, current scope and fibers. A `Scope` object never crosses a thread boundary, because no PHP object does. No lock enters the design: the fibers of one thread run one at a time.
 - Scope multiplexes one thread's state between operations; threads multiplex one process's state between executors. A server may use both: worker threads, each serving several requests as scopes.
