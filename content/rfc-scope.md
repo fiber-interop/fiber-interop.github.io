@@ -1,6 +1,6 @@
 # PHP RFC: Scope
 
-- Version: 0.9.4
+- Version: 0.9.5
 - Date: 2026-11-06
 - Author: Frode Børli, <frode@ennerd.com>
 - Status: Under Discussion
@@ -281,7 +281,7 @@ var_dump($_GET);                             // the SAPI's array: unchanged
 
 **References and globals.** `$GLOBALS['_GET']` and `global $_GET` refer to the current scope's value. A reference taken before switching scopes, such as `$g = &$_GET`, continues to refer to the earlier array. Switching scopes changes the global binding, not existing references.
 
-**Implementation.** The engine can swap six `zval` entries in the global symbol table on each scope switch, saving the old entries in the outgoing scope and loading those of the incoming scope. Arrays are not copied. Reads and writes retain their current cost. The extension's tests cover `PG(http_globals)`, the lazily created auto-globals, `unset($_GET)` and `global $_GET`; the php-src implementation must pass the same tests. Under ZTS, each thread has its own symbol table and root scope. Whether a save handler locks is declared by a new field of `ps_module`: the files handler sets it, and modules such as the PECL redis and memcached handlers can set it from their own locking settings. A user handler built on `SessionHandler` locks when the handler it wraps does; other user handlers are taken not to lock.
+**Implementation.** In the engine each scope holds its own six `zval`s, and the current scope is a pointer in the executor globals. The global symbol table's entries for the six, and `PG(http_globals)`, resolve through the current scope, so a scope switch changes where these values are read from: nothing is moved, copied or compared, and a switch costs a few pointer stores, the same whatever the scopes hold. Reads and writes retain their current cost, plus one pointer load. ext/session reaches its state (`$_SESSION`, the id, the status, the save handler and its data) through the current scope the same way. The extension cannot change where the engine reads these values, so it moves them between the symbol table and the scopes at every switch instead; its measurements below are an upper bound for the engine. The extension's tests cover `PG(http_globals)`, the lazily created auto-globals, `unset($_GET)` and `global $_GET`; the php-src implementation must pass the same tests. Under ZTS, each thread has its own symbol table and root scope. Whether a save handler locks is declared by a new field of `ps_module`: the files handler sets it, and modules such as the PECL redis and memcached handlers can set it from their own locking settings. A user handler built on `SessionHandler` locks when the handler it wraps does; other user handlers are taken not to lock.
 
 **Why include them now?** These are the request values that long-running servers already need to isolate. Moving them first tests the scope-switching mechanism against existing PHP behavior. The same approach can later apply to other engine state. Vote A covers request input and sessions together.
 
@@ -434,7 +434,7 @@ Generators are part of the main proposal rather than a separate vote. Leaving th
 
 ## Patches and Tests
 
-An extension implementing this RFC, including both secondary votes, is released for PHP 8.2 to 8.5 as `fiber-interop/ext-scope` 0.4.4 (<https://github.com/fiber-interop/ext-scope>, `pie install fiber-interop/ext-scope`), with phpt tests for each rule in this text. A userland polyfill with the same class and tests is `fiber-interop/scope` 0.4.0. A pull request against php-src master will accompany the RFC before the vote.
+An extension implementing this RFC, including both secondary votes, is released for PHP 8.2 to 8.5 as `fiber-interop/ext-scope` 0.5.0 (<https://github.com/fiber-interop/ext-scope>, `pie install fiber-interop/ext-scope`), with phpt tests for each rule in this text. A userland polyfill with the same class and tests is `fiber-interop/scope` 0.4.0. A pull request against php-src master will accompany the RFC before the vote.
 
 ## Implementation
 
@@ -462,7 +462,7 @@ An extension cannot add fields directly to native fiber and generator objects. T
 
 The last row is a generator created in one scope and stepped from another, so every step switches the six superglobals, the session, and the locale and timezone in and back out. It is the cost of interleaving operations, paid only when the current scope changes.
 
-These figures measure the extension's hash-table-based approach, not the proposed php-src implementation. In core, each fiber and generator can hold a scope pointer directly. The php-src patch will include its own measurements.
+These figures measure the extension's approach, not the proposed php-src implementation. The extension keeps each fiber's scope in a hash table and, at every change of scope, moves the six superglobals and copies ext/session's, the locale's and the timezone's state between the live globals and the scopes. In core, each fiber and generator holds a scope pointer directly, and the per-scope state is reached through the current scope (see vote A's implementation note), so a switch is a few pointer stores and costs the same whatever the scopes hold. The php-src patch will include its own measurements.
 
 ### Threads
 
@@ -471,7 +471,7 @@ Engine state currently has process/thread and PHP-request lifetimes. `Scope` add
 - The current scope and the root scope live in the executor globals, which ZTS makes per thread. Each thread has its own root scope, current scope and fibers. A `Scope` object never crosses a thread boundary, because no PHP object does. No lock enters the design: the fibers of one thread run one at a time.
 - Scope multiplexes one thread's state between operations; threads multiplex one process's state between executors. A server may use both: worker threads, each serving several requests as scopes.
 - For extension authors, per-scope state is the module-globals pattern with a shorter lifetime: declared the same way, constructed when a scope first touches it, destroyed when the scope is released. The follow-up RFC describes it in that vocabulary.
-- Cost: state converted to follow the scope is swapped on switch, not reached through an indirection, so access costs what it costs today on both builds and a switch costs a bounded number of word moves proportional to the converted state. State that hands out pointers into itself cannot be moved by value and is reached indirectly; the follow-up RFC lists such cases.
+- Cost: state converted to follow the scope is reached through the current scope, so access costs one pointer load more than today on both builds, and a switch costs a few pointer stores whatever the scopes hold. State small enough to be swapped by value at no measurable cost, such as the default timezone, may be swapped instead; the follow-up RFC lists the choice for each kind of state.
 - Scope adds no concurrency. State that follows the scope is never visible to another operation, so code that was correct under one request per process stays correct for that state. State kept shared on purpose stays shared, as it is across requests in any long-running process today.
 
 ## References
@@ -493,4 +493,5 @@ Engine state currently has process/thread and PHP-request lifetimes. `Scope` add
 - 2026-10-27: implementation notes only: ext-scope 0.4.3, tested on ZTS builds with threads (parallel).
 - 0.9.2 (2026-10-27): Introduction rewritten; no change to the proposal.
 - 0.9.3 (2026-10-27): vote A: `session_start()` throws a `RuntimeException` instead of blocking the process when a locking save handler's session id is active in another scope of the process (ext-scope 0.4.4); listed under Open Issues.
-- 0.9.4 (2026-11-06): from the discussion: the rule that a scope is bound when a call, fiber or generator is created; why a scope has no parent link; `run()` with partial function application; who uses `Scope` directly; statics and `$GLOBALS` mentioned in the Introduction; vote A explains why a new scope starts empty. No change to the proposal.
+- 0.9.4 (2026-10-28): implementation: in the engine, per-scope state is reached through the current scope, so a switch costs a few pointer stores whatever the scopes hold, and an access one pointer load more (Threads, "Cost"); the extension moves the state at each switch instead (ext-scope 0.5.0).
+- 0.9.5 (2026-11-06): from the discussion: the rule that a scope is bound when a call, fiber or generator is created; why a scope has no parent link; `run()` with partial function application; who uses `Scope` directly; statics and `$GLOBALS` mentioned in the Introduction; vote A explains why a new scope starts empty. No change to the proposal.
