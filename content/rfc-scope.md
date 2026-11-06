@@ -1,7 +1,7 @@
 # PHP RFC: Scope
 
-- Version: 0.9.3
-- Date: 2026-10-27
+- Version: 0.9.4
+- Date: 2026-11-06
 - Author: Frode Børli, <frode@ennerd.com>
 - Status: Under Discussion
 - Implementation: <https://github.com/fiber-interop/ext-scope> (extension); php-src pull request to follow
@@ -18,7 +18,7 @@ PHP has no object that represents a request, because until now a request has bee
 
 It also gives request state an owner. Two secondary votes make the superglobals (`$_GET`, `$_POST` and the others) and the session, and the default locale and default timezone, follow the current scope. Async runtimes have long had to work around these being process-wide. Frameworks have tried to replace them with request objects, but that has fragmented the ecosystem: Symfony's HttpKernel, PSR-7, and PSR-7 itself used in different styles (double-pass middleware that is handed a response object, or PSR-15 handlers that return one). Code written for one does not run on another, while `$_GET` and `$_POST` work everywhere. They are the most portable request API PHP has, so code will keep using them however many abstractions frameworks add. With `Scope` they stay safe to use when one process serves many requests.
 
-Code can create a scope, run code in it, and get the current scope. Code that never creates one runs in the root scope, a single object for the whole request, so nothing changes for it. A server creates a scope per request it handles. That gives services the three lifetimes known from other platforms: singleton, scoped and transient. A framework keeps request state in a `WeakMap` keyed by `Scope::getCurrent()`, and it is cleaned up as soon as the client request ends.
+Code can create a scope, run code in it, and get the current scope. Code that never creates one runs in the root scope, a single object for the whole request, so nothing changes for it. A server creates a scope per request it handles. That gives services the three lifetimes known from other platforms: singleton, scoped and transient. A framework keeps request state in a `WeakMap` keyed by `Scope::getCurrent()`, and it is cleaned up as soon as the client request ends. Most application code never touches `Scope`: the server creates the scopes, and the container decides how its scoped services are keyed by them.
 
 ``` php
 // A server runs each request in a scope of its own:
@@ -35,7 +35,7 @@ There are three immediate uses for this.
 
 **Request-lifetime services.** A container needs to create one instance of a scoped service per request. Resetting the container works only when requests cannot overlap. Using `Fiber::getCurrent()` as the key is also wrong: one request may start several fibers, and they should not get separate sessions, database connections, or units of work. Loggers, tracers, and request caches have the same problem.
 
-**Engine request state.** PHP keeps superglobals, sessions, output buffers, locale, timezone, error handlers, and ini settings in global state. They are reset between conventional requests, but two overlapping requests in the same process cannot safely use different values. A scope provides an owner for this state. Two secondary votes in this RFC move the request superglobals and session, and the default locale and timezone, into scopes. Other state is left for later RFCs. Code that does not create scopes retains its current behavior.
+**Engine request state.** PHP keeps superglobals, sessions, output buffers, locale, timezone, error handlers, and ini settings in global state. They are reset between conventional requests, but two overlapping requests in the same process cannot safely use different values. A scope provides an owner for this state. Two secondary votes in this RFC move the request superglobals and session, and the default locale and timezone, into scopes. Other state is left for later RFCs. Class statics and `$GLOBALS` do not follow the scope: applications use them for caches and singletons, and keeping those warm across requests is why worker modes exist (see What follows the scope). Code that does not create scopes retains its current behavior.
 
 **Interoperability.** Runtimes provide their own request identity. For example, phasync uses `phasync::getContext()`. A library written for one runtime cannot use that identity in another. `Scope` gives them one common identity.
 
@@ -90,17 +90,24 @@ final class Generator
 }
 ```
 
-A `Scope` is an identity, not a container for values and not a task manager. It has these rules:
+A `Scope` is an identity, not a container for values and not a task manager. One rule underlies the others: the scope is bound when whatever will run the code is created. A function call takes the scope current at the call, and a `Fiber` or `Generator` object the scope current when the object is created. `run()` replaces the current scope for the duration of one call. In detail:
 
-1.  `$scope->run($callback)` makes `$scope` the current scope while `$callback` runs, and restores the previous one afterwards, also when `$callback` throws. Calls nest: an inner `run()` replaces the current scope until it returns. A scope keeps no link to the scope it was run from.
+1.  `$scope->run($callback)` makes `$scope` the current scope while `$callback` runs, and restores the previous one afterwards, also when `$callback` throws. Calls nest: an inner `run()` replaces the current scope until it returns. A scope keeps no link to the scope it was run from: a server that creates each scope while running in the previous one would otherwise keep the whole chain alive. Code that wants a hierarchy keeps one in a `WeakMap` from child to parent.
 2.  A fiber belongs to the scope that is current when it is constructed, for its whole life. The fiber holds a strong reference to its scope. Fibers that libraries construct on the application's behalf join the operation without any cooperation from the library.
 3.  A generator belongs to the scope that is current when it is created, that is, when the generator function is called, for its whole life, like a fiber.
 4.  When a fiber or a generator runs, the current scope is its own: the scope it belongs to, or the scope of a `run()` call active inside it. Where it is resumed from doesn't matter. Each fiber, each generator, and `{main}`, has its own current scope, saved and restored when execution switches between them. The current scope is therefore that of the innermost executing context, fiber or generator, together with any `run()` active inside that context; a `run()` active in a caller never overrides the membership of a generator or fiber it resumes.
 5.  Functions and closures run in the scope of their caller. A closure returned by `$scope->bind($closure)` runs in `$scope`, whoever calls it. `bind()` returns a new closure, with any previous binding replaced: `$a->bind($b->bind($f))` runs `$f` in `$a`.
-6.  In `{main}`, outside any `run()`, and in fibers and generators created there, the current scope is the root scope, `Scope::getRootScope()`. The root scope is a single object that lives as long as the PHP request: under the CLI that is the whole process, under a SAPI that serves several requests per process, such as php-fpm, there is one root per request.
+6.  In `{main}`, outside any `run()`, and in fibers and generators created there, the current scope is the root scope, `Scope::getRootScope()`. The root scope is a single object that lives from engine startup to shutdown: under the CLI that is the whole process, under a SAPI that serves several requests per process, such as php-fpm, there is one root per request.
 7.  A destructor runs in the scope that is current when its object is released, like any other function. An object released during another operation's `run()` therefore runs its destructor in that operation's scope. An object that needs its own scope at destruction captures it when it is constructed, and runs its cleanup with `$scope->run()`.
 
 The root scope is used when code is not running inside an explicitly created scope. It covers ordinary CLI and php-fpm execution and the server loop. `Scope::getCurrent() !== Scope::getRootScope()` tests whether code is in an explicit operation. `getCurrent()` always returns an object, so callers never need a null case and can always use a scope as a `WeakMap` key. To run code outside an operation, call `Scope::getRootScope()->run($f)`. State keyed by the root persists for the PHP request (for the lifetime of the process in a typical CLI program).
+
+`run()` takes any callable, partial function applications included. The placeholder decides whether the call happens inside the scope:
+
+``` php
+$scope->run(handle($request, ...));   // handle() runs in $scope
+$scope->run(handle($request));        // handle() runs in the caller's scope; run() is given its result
+```
 
 Ordinary closures do not capture a scope. Most applications create route handlers, middleware, listeners, and container factories at startup, then call them during requests. If closures inherited their creation scope, those handlers would always run in the root scope. When a callback must run in the scope where it was registered, the caller binds it explicitly:
 
@@ -240,7 +247,7 @@ Six superglobals hold request data: `$_GET`, `$_POST`, `$_COOKIE`, `$_FILES`, `$
 If vote A passes, each scope has its own request arrays and session:
 
 - The root scope's arrays are the ones the SAPI populates: unchanged behaviour for every script that never creates a scope.
-- A new scope starts empty: the six arrays are empty and no session is active (`session_status()` is `PHP_SESSION_NONE`). Whoever creates the scope seeds it, as a server does for each request. A new scope does not inherit its creator's values: a copy of an array is shallow, so objects in it would stay shared with the creator, and an inherited copy would promise an isolation it cannot give.
+- A new scope starts empty: the six arrays are empty and no session is active (`session_status()` is `PHP_SESSION_NONE`). Whoever creates the scope seeds it, as a server does for each request. A new scope does not inherit its creator's values. A scope is created for a new unit of work, typically a request in a long-lived server; inherited values would have to be cleared for every request, and a server that missed one would hand it to the next request. Code that should see the current request's values does not create a scope: it already runs in the request's scope, and so do the fibers and generators it creates. An inherited copy would also be shallow: an object stored in `$_REQUEST` or `$_SESSION` would be the same instance in both scopes.
 - An assignment to one of the six inside a scope changes only that scope's array. Reads see the current scope's array. All fibers and generators of the scope share it, as the rules above give.
 - `$_REQUEST` is a scope-local snapshot like the others, not a live merge: a scope that assigns `$_GET` and relies on `$_REQUEST` assigns it too, as code that assigns `$_GET` must today. Leaving `$_REQUEST` shared while the three it is built from are per scope would give one request two inconsistent views of its input, which is why it is in the set.
 - `$_SERVER` mixes request facts (`REQUEST_URI`, `REQUEST_METHOD`, the `HTTP_*` entries, `REMOTE_ADDR`, `HTTPS`) with the environment (`PATH`, `DOCUMENT_ROOT`, what the application put there while booting). A request's scope starts with an empty `$_SERVER` like the others, and the server writes both into it: the environment entries it wants the request to see, then the request's own. Leaving it shared would leave a request's own URI, method, headers and client address to whichever request wrote them last: read after the request's first suspension, they would be another request's, silently.
@@ -302,7 +309,7 @@ Only state that belongs to a logical operation should follow its scope. A global
 | `$_ENV`, `setlocale()`, `chdir()`, `umask()`                                                           | the process                              | no                                     |
 | persistent resources: `PDO::ATTR_PERSISTENT`, `pg_pconnect()`, mysqli `p:` hosts, `pfsockopen()`       | the process, lent to one scope at a time | later, on its own: see below           |
 
-Last-error functions do not need scope isolation in this design: fibers switch only when suspended, so a call to `json_decode()` immediately followed by `json_last_error()` is not interrupted by another fiber. Reading another coroutine's last error is not a supported pattern. Class and function statics, and ordinary `$GLOBALS` entries, stay shared because applications use them for caches, registries, and singletons. Virtualizing them for legacy compatibility is a different feature.
+Last-error functions do not need scope isolation in this design: fibers switch only when suspended, so a call to `json_decode()` immediately followed by `json_last_error()` is not interrupted by another fiber. Reading another coroutine's last error is not a supported pattern. Class and function statics, and ordinary `$GLOBALS` entries, stay shared because applications use them for caches, registries, and singletons. Statics that hold request data, such as a current user or a cache derived from the request, are already wrong in today's worker modes; `Scope` gives that code a key to move the data to. Virtualizing them for legacy compatibility is a different feature.
 
 Persistent connections are process-wide. PHP caches them in `EG(persistent_list)`, usually by connection parameters. Two scopes can obtain the same underlying database session at once. A transaction started in one scope could then affect the other scope's queries and rollback.
 
@@ -398,6 +405,8 @@ Another RFC will propose an internal API for per-scope engine and extension stat
 
 Within one scope, all fibers continue to share that state. The difference is that a different operation cannot overwrite it.
 
+Per-scope storage is left to containers and libraries, which build it on `WeakMap`. Language support, such as an attribute that keys a static property by the current scope, could follow if a common pattern emerges.
+
 Some state belongs to the operating system and cannot cheaply follow a scope: `setlocale()`, `chdir()`, `umask()`, environment variables, and C syslog's `openlog()` identity. Per-scope versions would need emulation.
 
 A later RFC can also add operations on an operation as a whole, for example:
@@ -484,3 +493,4 @@ Engine state currently has process/thread and PHP-request lifetimes. `Scope` add
 - 2026-10-27: implementation notes only: ext-scope 0.4.3, tested on ZTS builds with threads (parallel).
 - 0.9.2 (2026-10-27): Introduction rewritten; no change to the proposal.
 - 0.9.3 (2026-10-27): vote A: `session_start()` throws a `RuntimeException` instead of blocking the process when a locking save handler's session id is active in another scope of the process (ext-scope 0.4.4); listed under Open Issues.
+- 0.9.4 (2026-11-06): from the discussion: the rule that a scope is bound when a call, fiber or generator is created; why a scope has no parent link; `run()` with partial function application; who uses `Scope` directly; statics and `$GLOBALS` mentioned in the Introduction; vote A explains why a new scope starts empty. No change to the proposal.
